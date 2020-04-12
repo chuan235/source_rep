@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="top.gmfcj.mapper.AdminMapper" >
+    <!--开启本mapper的namespace下的二级缓存-->
+    <!--
+        eviction:代表的是缓存回收策略，目前MyBatis提供以下策略。
+        (1) LRU,最近最少使用的，一处最长时间不用的对象
+        (2) FIFO,先进先出，按对象进入缓存的顺序来移除他们
+        (3) SOFT,软引用，移除基于垃圾回收器状态和软引用规则的对象
+        (4) WEAK,弱引用，更积极的移除基于垃圾收集器状态和弱引用规则的对象。这里采用的是LRU，
+                移除最长时间不用的对形象
+
+        flushInterval:刷新间隔时间，单位为毫秒，这里配置的是100秒刷新，如果你不配置它，那么当
+        SQL被执行的时候才会去刷新缓存。
+
+        size:引用数目，一个正整数，代表缓存最多可以存储多少个对象，不宜设置过大。设置过大会导致内存溢出。
+        这里配置的是1024个对象
+
+        readOnly:只读，意味着缓存数据只能读取而不能修改，这样设置的好处是我们可以快速读取缓存，缺点是我们没有
+        办法修改缓存，他的默认值是false，不允许我们修改
+    -->
+    <cache eviction="LRU" flushInterval="100000" size="1024" />
+
+    <resultMap id="AdminResultMap" type="top.gmfcj.bean.Admin">
+        <id     column="admin_id" property="adminId" />
+        <result column="password" property="password" />
+        <result column="user_name" property="userName"/>
+    </resultMap>
+
+    <select id="queryAll" resultMap="AdminResultMap" useCache="true">
+      select * from admin
+    </select>
+
+    <sql id="selectAdminVo">
+        select * from admin
+    </sql>
+
+    <select id="selectAdminById" parameterType="Integer" resultType="top.gmfcj.bean.Admin" useCache="true">
+        <include refid="selectAdminVo"/>
+        where admin_id = #{adminId}
+    </select>
+
+    <select id="selectList" resultMap="AdminResultMap" parameterType="top.gmfcj.bean.Admin" useCache="true">
+      <include refid="selectAdminVo"/>
+      <where>
+          <if test="adminId != null">, and admin_id = #{adminId}</if>
+          <if test="password != null and password != '' ">, and password = #{password}</if>
+          <if test="userName != null and userName != '' ">, and user_name like concat('%', #{userName},'%') </if>
+      </where>
+    </select>
+
+    <update id="updatePassword" parameterType="top.gmfcj.bean.Admin" flushCache="true">
+        update admin set password = #{password} where admin_id = #{adminId}
+    </update>
+</mapper>
