@@ -1,0 +1,20 @@
+plugins {
+    id 'java'
+}
+
+group 'org.springframework'
+version '5.1.10.BUILD-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+    provided group: 'org.apache.tomcat.embed', name: 'tomcat-embed-core', version: '8.5.21'
+    compile group: 'com.alibaba', name: 'fastjson', version: '1.2.47'
+    compile project(':spring-context')
+    compile project(':spring-webmvc')
+}

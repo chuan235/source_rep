@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans 
+       http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<bean id="user1" class="top.gmfcj.component.UserTest1">
+		<property name="name" value="userTest1"/>
+	</bean>
+	<bean id="user2" parent="user1">
+		<!--parent 会生成和user1一样的一个名为user2的对象，只是属性值不同 -->
+		<property name="name" value="userTest2"/>
+	</bean>
+
+	<bean name="myMethodReplacer" class="top.gmfcj.component.UserTest1"></bean>
+
+	<bean name="test2" class="top.gmfcj.component.UserTest2">
+		<replaced-method name="test" replacer="myMethodReplacer"></replaced-method>
+	</bean>
+
+
+</beans>
