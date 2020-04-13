@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:dubbo="http://dubbo.apache.org/schema/dubbo"
+       xmlns="http://www.springframework.org/schema/beans"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.3.xsd
+       http://dubbo.apache.org/schema/dubbo http://dubbo.apache.org/schema/dubbo/dubbo.xsd">
+
+    <dubbo:application name="provider-demo"/>
+
+    <!--每一个id就会暴露一个服务-->
+    <dubbo:protocol name="dubbo" port="20890"/>
+    <dubbo:protocol id="http" name="http" server="tomcat" port="8081"/>
+    <!--<dubbo:protocol name="http" server="servlet"/>-->
+
+    <!--<dubbo:protocol id="http" name="http" server="jetty" port="8082"/>-->
+
+
+    <!--配置中心,在配置中心存在全局和单个项目配置，在配置中心配置注册中心-->
+    <!--<dubbo:config-center address="zookeeper://192.168.222.129:2181" />-->
+
+    <!--注册中心-->
+    <dubbo:registry address="zookeeper://192.168.222.129:2181" />
+    <!--<dubbo:registry address="redis://192.168.222.129:6379" />-->
+
+    <!--不允许进行服务注册，通常在开发阶段和直连提供者一起使用-->
+    <!--<dubbo:registry address="192.168.222.129:9090" register="false" />-->
+
+    <!--不允许进行服务订阅-->
+    <!--<dubbo:registry id="qdRegistry" address="192.168.222.129:9090" subscribe="false" />-->
+
+    <!--静态服务，非动态服务，服务提供者初次注册时为禁用状态，需人工启用。断线时，将不会被自动删除，需人工禁用。-->
+    <!--<dubbo:registry address="zookeeper://192.168.222.129:2181" dynamic="false" />-->
+    <!--<dubbo:config-center address="zookeeper://192.168.222.129:2181"/>-->
+
+
+
+    <!--可以直接使用class属性指定-->
+    <!--<dubbo:service interface="top.gmfcj.api.HelloService" class="top.gmfcj.provider.impl.HelloXmlService"/>-->
+    
+    <bean id="helloService" class="top.gmfcj.provider.impl.HelloXmlService"/>
+
+    <!--
+        interface: 暴露服务的接口
+        ref：暴露的具体实现类
+        class：暴露的具体实现类
+        retries:调用失败时失败自动重试的次数
+        cluster：配置集群模式
+        loadbalance：配置负载均衡
+        callback: true/false 参数是否为callback接口
+            如果是callback，服务提供方将生成反向代理，可以从服务提供方反向调用消费方，通常用于事件推送.
+    -->
+    <dubbo:service interface="top.gmfcj.api.HelloService" ref="helloService">
+        <dubbo:method name="sayHello" retries="2">
+            <!--<dubbo:argument index="0" type="java.lang.String" callback="true" />-->
+        </dubbo:method>
+    </dubbo:service>
+
+</beans>

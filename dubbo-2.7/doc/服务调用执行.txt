@@ -1,0 +1,115 @@
+ME 对接 SAP
+1、ME做标识，保证SAP可以成功（如果SAP不成功，ME也不可能成功），数据直接写入到db
+2、将数据推送到SAP
+3、监控SAP返回的数据，检测是否成功，成功更新状态，失败继续推送....
+
+
+
+
+
+RegistryProtocol
+Invoker invoker = cluster.join(directory);
+
+Cluster
+	MockClusterWrapper#join	  		-->   new MockClusterInvoker
+		--> FailoverCluster#join	-->   new FailoverClusterInvoker
+
+
+invoker --> MockClusterInvoker(FailoverClusterInvoker)
+
+proxyFactory.getProxy(invoker) -> StubProxyFactoryWrapper(JavassistProxyFactory -> return new AbstractProxyInvoker(....))
+
+service.sayHello -> 生成的proxy -> InvokerInvocationHandler#invoke(生成RpcInvocation) -> MockClusterInvoker#invoke(RpcInvocation)
+	-> 检查是否存在mock -> FailoverClusterInvoker#invoke(RpcInvocation) —> AbstractClusterInvoker#invoke(RpcInvocation)
+	-> RegistryDirectory#doList  -开启路由-> RouterChain#route(consumerUrl,RpcInvocation) --> 返回获取到的服务列表
+		List<Invoker<T>> invokers = list(invocation)，返回由路由过滤后的服务invokers
+
+
+routerChain{
+	// 这里的invokers其实就是服务目录中的所有服务集合
+	invokers: [
+		InvokerDelegate{
+			providerUrl: URL(服务提供者的地址...),
+			invoker: 服务提供者的对应的ListenerInvokerWrapper
+			url: 同providerUrl
+		},
+	]
+	routers: [MockInvokersSelector, TagRouter, AppRouter, ServiceRouter]
+}
+
+	-> routers#route(finalInvokers, consumerUrl,RpcInvocation)
+		-> MockInvokersSelector#route  -> 获取RpcInvocation中的attachments 中 key=invocation.need.mock
+				如果为true，表示需要筛选出mock协议的服务invoker，否则需要过滤掉mocker协议的invoker,返回的invoker集合将会作为下一个路由类的finalInvokers参数
+		-> TagRouter#route 	-> 根据标签过滤invokers
+		-> AppRouter -> 根据AppRouter中的 conditionRouters 来过滤invokers
+		-> ServiceRouter -> 同AppRouter  ->  ListenableRouter#route
+	-> 开始返回筛选后的invokers
+	-> 初始化负载均衡  LoadBalance loadbalance = initLoadBalance(invokers, invocation);  构建一个负载均衡策略的类，用来选择调用哪一个具体的服务
+	-> FailoverClusterInvoker#doInvoke(RpcInvocation, endInvokes,LoadBalance)
+		->  1、检查invokers是不是为空
+			2、获取重试次数，默认是2次，加上当前这一次，总共要调用三次
+		下面就是循环retry+1次执行，除非拿到结果
+			3、AbstractClusterInvoker#select 方法就是从 endInvokes 中选出一个invoker进行调用（使用到loadbalance）
+				-> 拿提供者url上的 sticky 值，判断是否启用粘滞连接，尽可能让客户端向同一个服务提供者发起调用（上一次调用的时候将调用的服务缓存一下，下一次判断是否可用即可）
+				-> AbstractClusterInvoker#doSelect 返回选择出来的invoker
+					Invoker<T> invoker = loadbalance.select(invokers, getUrl(), invocation);
+					具体选择逻辑： RandomLoadBalance#doSelect 随机选取(可以配置权重weight)
+							 	  RoundRobinLoadBalance		 轮询
+							 	  ConsistentHashLoadBalance  一致性hash（treeMap 默认1->160虚拟节点）
+							 	  LeastActiveLoadBalance 	 最小活跃次数
+			4、将返回的invoker加入到已调用的invoker集合中，为了调用失败做判断，重试的是不一样的服务器
+			5、开始执行invoker
+				Result result = invoker.invoke(invocation);
+			6、出现异常则抛出异常，继续循环
+	-> 调用invoker Registry$InvokerDelegate#invoke
+
+	ListenerInvokerWrapper
+	ProtocolFilterWrapper
+		
+ConsumerContextFilter
+		FutureFilter
+		MonitorFilter	AbstractProxyInvoker
+	Wrapper jdk生成的wrapperClass
+
+
+ProtocolFilterWrapper#export -> ProtocolFilterWrapper#buildInvokerChain
+服务提供者build出来的过滤器链
+	EchoFilter
+	ClassLoaderFilter
+	GenericFilter
+	ContextFilter
+	TraceFilter
+	TimeoutFilter
+	MonitorFilter
+	ExceptionFilter
+
+ProtocolFilterWrapper#refer -> ProtocolFilterWrapper#buildInvokerChain
+消费者的一端build出来的过滤器链
+	ConsumerContextFilter
+	FutureFilter
+	MonitorFilter
+
+
+Protocol接口的Wrapper类{
+	Exporter export;
+	Invoker refer;
+}
+
+ProtocolFilterWrapper => export方法： protocol.export(包裹了InvokerDelegate，真实对象的代理对象)  		-> Exporter
+						 refer方法 ：将protocol.refer(type,url)返回结果和build出来的过滤器链一起返回 	-> Invoker
+ProtocolListenerWrapper => export/refer时，返回一个ListenerExporterWrapper对象，包裹了（protocol.refer/export的结果）
+QosProtocolWrapper => export/refer时，记录注册或者引用的URL
+
+
+安装openjdk
+yum -y install java-1.8.0-openjdk.x86_64
+
+yum -y install java-1.8.0-openjdk-devel.x86_64
+
+
+
+
+
+
+
+
