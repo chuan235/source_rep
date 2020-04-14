@@ -1,0 +1,90 @@
+Spring容器的扩展点
+（1）BeanPostProcessor	在bean的构造方法之后和init方法之前的扩展操作
+（2）BeanFactoryPostProcessor 传入一个bean工厂
+（3）BeanDefinitionRegistryPostProcessor 继承了BeanFactoryPostProcessor
+
+
+
+向Spring容器中注入bean定义的方式
+    构建容器时传入对于的class对象注册
+    使用Spring容器中的register进行注册
+
+
+
+配置bean对象初始化和销毁的方法
+    @Bean中进行配置
+    指定@PostConstructor和@PreDestory方法
+    实现InitializingBean和DisposableBean接口
+    实现InitDestoryAnnotationBeanPostProcessor 接口
+
+
+
+BeanDefinitionRegistryPostProcessor和BeanFactoryPostProcessor的执行时机
+位置：org.springframework.context.support.PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory, java.util.List<BeanFactoryPostProcessor>)
+
+通过set方法注入（执行一次）
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanDefinitionRegistry
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanFactory
+MyBeanFactoryPostProcessor
+
+即通过set又添加了注解（执行两次）=> 因为set方法注入的并没有放入到set集合中，在后续包的扫描时又要执行一次
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanDefinitionRegistry
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanDefinitionRegistry
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanFactory
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanFactory
+MyBeanFactoryPostProcessor
+MyBeanFactoryPostProcessor
+
+添加注解会执行一次（执行一次） => 在执行BeanDefinitionRegistryPostProcessor时，执行过了的都放入的set集合中
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanDefinitionRegistry
+MyBeanDefinitionRegistryPostProcessor - postProcessBeanFactory
+MyBeanFactoryPostProcessor
+
+对于spring中最重要的ConfigurationClassPostProcessor也只会执行一次，因为它在一次执行的时候就放入了set集合中
+configuration class post processer postProcessBeanDefinitionRegistry
+configuration class post processer postProcessBeanFactory
+
+
+
+看ConfigurationClassPostProcessor的postProcessBeanDefinitionRegistry方法
+org.springframework.context.annotation.ConfigurationClassPostProcessor.postProcessBeanDefinitionRegistry
+
+检查这个bean定义中是否被标注了full或者lite
+if (ConfigurationClassUtils.isFullConfigurationClass(beanDef) || ConfigurationClassUtils.isLiteConfigurationClass(beanDef))
+
+
+
+如果没有标注，在检查这个bean定义的注解是哪一种类型
+if (isFullConfigurationCandidate(metadata)) {
+    beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_FULL);
+}else if (isLiteConfigurationCandidate(metadata)) {
+    beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_LITE);
+}else {
+    return false;
+}
+return true;
+full => @Configuration注解
+lite => 对应以下注解
+        candidateIndicators.add(Component.class.getName());
+        candidateIndicators.add(ComponentScan.class.getName());
+        candidateIndicators.add(Import.class.getName());
+        candidateIndicators.add(ImportResource.class.getName());
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

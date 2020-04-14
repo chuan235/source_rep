@@ -1,0 +1,160 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by Fernflower decompiler)
+// cglib 成功的configuration配置类的代理对象
+
+package top.gmfcj.conf;
+
+import java.lang.reflect.Method;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.cglib.core.ReflectUtils;
+import org.springframework.cglib.core.Signature;
+import org.springframework.cglib.proxy.Callback;
+import org.springframework.cglib.proxy.MethodInterceptor;
+import org.springframework.cglib.proxy.MethodProxy;
+import org.springframework.cglib.proxy.NoOp;
+import org.springframework.context.annotation.ConfigurationClassEnhancer.EnhancedConfiguration;
+import top.gmfcj.component.UserTest2;
+import top.gmfcj.component.UserTest3;
+
+public class AppConfig$$EnhancerBySpringCGLIB$$af448cfe extends AppConfig implements EnhancedConfiguration {
+    private boolean CGLIB$BOUND;
+    public static Object CGLIB$FACTORY_DATA;
+    private static final ThreadLocal CGLIB$THREAD_CALLBACKS;
+    private static final Callback[] CGLIB$STATIC_CALLBACKS;
+    private MethodInterceptor CGLIB$CALLBACK_0;
+    private MethodInterceptor CGLIB$CALLBACK_1;
+    private NoOp CGLIB$CALLBACK_2;
+    private static Object CGLIB$CALLBACK_FILTER;
+    private static final Method CGLIB$userTest3$0$Method;
+    private static final MethodProxy CGLIB$userTest3$0$Proxy;
+    private static final Object[] CGLIB$emptyArgs;
+    private static final Method CGLIB$userTest2$1$Method;
+    private static final MethodProxy CGLIB$userTest2$1$Proxy;
+    private static final Method CGLIB$setBeanFactory$6$Method;
+    private static final MethodProxy CGLIB$setBeanFactory$6$Proxy;
+    public BeanFactory $$beanFactory;
+
+    public AppConfig$$EnhancerBySpringCGLIB$$af448cfe() {
+        CGLIB$BIND_CALLBACKS(this);
+    }
+
+    static {
+        CGLIB$STATICHOOK2();
+        CGLIB$STATICHOOK1();
+    }
+
+    public final void setBeanFactory(BeanFactory var1) throws BeansException {
+        MethodInterceptor var10000 = this.CGLIB$CALLBACK_1;
+        if (var10000 == null) {
+            CGLIB$BIND_CALLBACKS(this);
+            var10000 = this.CGLIB$CALLBACK_1;
+        }
+
+        if (var10000 != null) {
+            var10000.intercept(this, CGLIB$setBeanFactory$6$Method, new Object[]{var1}, CGLIB$setBeanFactory$6$Proxy);
+        } else {
+            super.setBeanFactory(var1);
+        }
+    }
+
+    public final UserTest3 userTest3() {
+        MethodInterceptor var10000 = this.CGLIB$CALLBACK_0;
+        if (var10000 == null) {
+            CGLIB$BIND_CALLBACKS(this);
+            var10000 = this.CGLIB$CALLBACK_0;
+        }
+
+        return var10000 != null ? (UserTest3)var10000.intercept(this, CGLIB$userTest3$0$Method, CGLIB$emptyArgs, CGLIB$userTest3$0$Proxy) : super.userTest3();
+    }
+
+    public final UserTest2 userTest2() {
+        MethodInterceptor var10000 = this.CGLIB$CALLBACK_0;
+        if (var10000 == null) {
+            CGLIB$BIND_CALLBACKS(this);
+            var10000 = this.CGLIB$CALLBACK_0;
+        }
+
+        return var10000 != null ? (UserTest2)var10000.intercept(this, CGLIB$userTest2$1$Method, CGLIB$emptyArgs, CGLIB$userTest2$1$Proxy) : super.userTest2();
+    }
+
+    public static MethodProxy CGLIB$findMethodProxy(Signature var0) {
+        String var10000 = var0.toString();
+        switch(var10000.hashCode()) {
+        case 921276368:
+            if (var10000.equals("userTest2()Ltop/gmfcj/component/UserTest2;")) {
+                return CGLIB$userTest2$1$Proxy;
+            }
+            break;
+        case 1946768398:
+            if (var10000.equals("userTest3()Ltop/gmfcj/component/UserTest3;")) {
+                return CGLIB$userTest3$0$Proxy;
+            }
+            break;
+        case 2095635076:
+            if (var10000.equals("setBeanFactory(Lorg/springframework/beans/factory/BeanFactory;)V")) {
+                return CGLIB$setBeanFactory$6$Proxy;
+            }
+        }
+
+        return null;
+    }
+
+    static void CGLIB$STATICHOOK1() {
+        CGLIB$THREAD_CALLBACKS = new ThreadLocal();
+        CGLIB$emptyArgs = new Object[0];
+        Class var0 = Class.forName("top.gmfcj.conf.AppConfig$$EnhancerBySpringCGLIB$$af448cfe");
+        Class var1;
+        CGLIB$setBeanFactory$6$Method = ReflectUtils.findMethods(new String[]{"setBeanFactory", "(Lorg/springframework/beans/factory/BeanFactory;)V"}, (var1 = Class.forName("org.springframework.beans.factory.BeanFactoryAware")).getDeclaredMethods())[0];
+        CGLIB$setBeanFactory$6$Proxy = MethodProxy.create(var1, var0, "(Lorg/springframework/beans/factory/BeanFactory;)V", "setBeanFactory", "CGLIB$setBeanFactory$6");
+        Method[] var10000 = ReflectUtils.findMethods(new String[]{"userTest3", "()Ltop/gmfcj/component/UserTest3;", "userTest2", "()Ltop/gmfcj/component/UserTest2;"}, (var1 = Class.forName("top.gmfcj.conf.AppCofig")).getDeclaredMethods());
+        CGLIB$userTest3$0$Method = var10000[0];
+        CGLIB$userTest3$0$Proxy = MethodProxy.create(var1, var0, "()Ltop/gmfcj/component/UserTest3;", "userTest3", "CGLIB$userTest3$0");
+        CGLIB$userTest2$1$Method = var10000[1];
+        CGLIB$userTest2$1$Proxy = MethodProxy.create(var1, var0, "()Ltop/gmfcj/component/UserTest2;", "userTest2", "CGLIB$userTest2$1");
+    }
+
+    final void CGLIB$setBeanFactory$6(BeanFactory var1) throws BeansException {
+        super.setBeanFactory(var1);
+    }
+
+    final UserTest2 CGLIB$userTest2$1() {
+        return super.userTest2();
+    }
+
+    final UserTest3 CGLIB$userTest3$0() {
+        return super.userTest3();
+    }
+
+    static void CGLIB$STATICHOOK2() {
+    }
+
+    private static final void CGLIB$BIND_CALLBACKS(Object var0) {
+        AppConfig$$EnhancerBySpringCGLIB$$af448cfe var1 = (AppConfig$$EnhancerBySpringCGLIB$$af448cfe)var0;
+        if (!var1.CGLIB$BOUND) {
+            var1.CGLIB$BOUND = true;
+            Object var10000 = CGLIB$THREAD_CALLBACKS.get();
+            if (var10000 == null) {
+                var10000 = CGLIB$STATIC_CALLBACKS;
+                if (var10000 == null) {
+                    return;
+                }
+            }
+
+            Callback[] var10001 = (Callback[])var10000;
+            var1.CGLIB$CALLBACK_2 = (NoOp)((Callback[])var10000)[2];
+            var1.CGLIB$CALLBACK_1 = (MethodInterceptor)var10001[1];
+            var1.CGLIB$CALLBACK_0 = (MethodInterceptor)var10001[0];
+        }
+
+    }
+
+    public static void CGLIB$SET_THREAD_CALLBACKS(Callback[] var0) {
+        CGLIB$THREAD_CALLBACKS.set(var0);
+    }
+
+    public static void CGLIB$SET_STATIC_CALLBACKS(Callback[] var0) {
+        CGLIB$STATIC_CALLBACKS = var0;
+    }
+}

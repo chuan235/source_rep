@@ -31,4 +31,5 @@ rootProject.children.each {project ->
 }
 include 'spring-gmfcj'
 include 'spring-gmfcj-mvc'
+include 'spring-gmfcj-mybatis'
 
