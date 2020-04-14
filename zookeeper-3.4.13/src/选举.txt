@@ -1,0 +1,49 @@
+QuorumPeer#start -> QuorumPeer#startLeaderElection 准备开始选举
+
+final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
+final ConcurrentHashMap<Long, ArrayBlockingQueue<ByteBuffer>> queueSendMap;
+final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
+
+线程：
+    WorkerSender        发送sendqueue中的数据（queueSendMap）
+    WorkerReceiver      取出recvQueue中的数据
+
+    SendWork            将queueSendMap中数据发送到指定的服务器
+    RecvWorker          从监听到的服务器接收数据，放入到recvQueue中
+
+计算Leader
+    FastLeaderElection#lookForLeader
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
