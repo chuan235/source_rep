@@ -79,12 +79,13 @@ public class HiddenHttpMethodFilter extends OncePerRequestFilter {
 			throws ServletException, IOException {
 
 		HttpServletRequest requestToUse = request;
-
+		// post请求才会进来
 		if ("POST".equals(request.getMethod()) && request.getAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE) == null) {
 			String paramValue = request.getParameter(this.methodParam);
 			if (StringUtils.hasLength(paramValue)) {
 				String method = paramValue.toUpperCase(Locale.ENGLISH);
 				if (ALLOWED_METHODS.contains(method)) {
+					// 是允许的方法 -> HttpMethodRequestWrapper -> Request
 					requestToUse = new HttpMethodRequestWrapper(request, method);
 				}
 			}

@@ -80,21 +80,21 @@ public class FormContentFilter extends OncePerRequestFilter {
 
 
 	@Override
-	protected void doFilterInternal(
-			HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
 			throws ServletException, IOException {
-
+		// 解析request
 		MultiValueMap<String, String> params = parseIfNecessary(request);
 		if (!CollectionUtils.isEmpty(params)) {
+			// FormContentRequestWrapper -> request
 			filterChain.doFilter(new FormContentRequestWrapper(request, params), response);
-		}
-		else {
+		} else {
 			filterChain.doFilter(request, response);
 		}
 	}
 
 	@Nullable
 	private MultiValueMap<String, String> parseIfNecessary(HttpServletRequest request) throws IOException {
+		// "PUT", "PATCH", "DELETE"这三种类型的不需要解析
 		if (!shouldParse(request)) {
 			return null;
 		}
@@ -105,6 +105,7 @@ public class FormContentFilter extends OncePerRequestFilter {
 				return request.getInputStream();
 			}
 		};
+		// 解析from表单
 		return this.formConverter.read(null, inputMessage);
 	}
 

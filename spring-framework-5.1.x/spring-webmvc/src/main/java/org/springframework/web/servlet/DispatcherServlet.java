@@ -619,7 +619,7 @@ public class DispatcherServlet extends FrameworkServlet {
 		if (this.detectAllHandlerMappings) {
 			// Find all HandlerMappings in the ApplicationContext, including ancestor contexts.
 			// 从spring容器中寻找所有的 HandlerMappings
-			// 这些 HandlerMappings 是什么时候放入的容器之中？
+			// 这些 HandlerMappings 是什么时候放入的容器之中？ 就是在下面的getDefaultStrategies中放入容器的
 			Map<String, HandlerMapping> matchingBeans =
 					BeanFactoryUtils.beansOfTypeIncludingAncestors(context, HandlerMapping.class, true, false);
 			if (!matchingBeans.isEmpty()) {
@@ -942,9 +942,10 @@ public class DispatcherServlet extends FrameworkServlet {
 	 */
 	@Override
 	protected void doService(HttpServletRequest request, HttpServletResponse response) throws Exception {
+		// 日志记录
 		logRequest(request);
 
-		// Keep a snapshot of the request attributes in case of an include,
+		// Keep a snapshot of the request attributes in case of an include, 缓存请求属性
 		// to be able to restore the original attributes after the include.
 		Map<String, Object> attributesSnapshot = null;
 		if (WebUtils.isIncludeRequest(request)) {
@@ -957,7 +958,7 @@ public class DispatcherServlet extends FrameworkServlet {
 				}
 			}
 		}
-
+		// 设置请求的组件
 		// Make framework objects available to handlers and view objects.
 		request.setAttribute(WEB_APPLICATION_CONTEXT_ATTRIBUTE, getWebApplicationContext());
 		request.setAttribute(LOCALE_RESOLVER_ATTRIBUTE, this.localeResolver);

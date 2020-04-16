@@ -120,15 +120,18 @@ public abstract class AbstractUrlHandlerMapping extends AbstractHandlerMapping i
 	@Nullable
 	protected Object getHandlerInternal(HttpServletRequest request) throws Exception {
 		String lookupPath = getUrlPathHelper().getLookupPathForRequest(request);
+		// handlerMap<String, Object>中找
 		Object handler = lookupHandler(lookupPath, request);
 		if (handler == null) {
 			// We need to care for the default handler directly, since we need to
 			// expose the PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE for it as well.
 			Object rawHandler = null;
 			if ("/".equals(lookupPath)) {
+				// 根处理器
 				rawHandler = getRootHandler();
 			}
 			if (rawHandler == null) {
+				// 默认的处理器
 				rawHandler = getDefaultHandler();
 			}
 			if (rawHandler != null) {

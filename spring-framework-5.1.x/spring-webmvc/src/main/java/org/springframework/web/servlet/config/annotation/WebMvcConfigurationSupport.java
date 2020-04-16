@@ -189,6 +189,7 @@ public class WebMvcConfigurationSupport implements ApplicationContextAware, Serv
 	private static final boolean jsonbPresent;
 
 	static {
+		// 判断是否存在一些jar包  使用哪一种技术
 		ClassLoader classLoader = WebMvcConfigurationSupport.class.getClassLoader();
 		romePresent = ClassUtils.isPresent("com.rometools.rome.feed.WireFeed", classLoader);
 		jaxb2Present = ClassUtils.isPresent("javax.xml.bind.Binder", classLoader);
@@ -337,7 +338,7 @@ public class WebMvcConfigurationSupport implements ApplicationContextAware, Serv
 	/**
 	 * Override this method to add Spring MVC interceptors for
 	 * pre- and post-processing of controller invocation.
-	 * @see InterceptorRegistry
+	 * @see InterceptorRegistry 调用子类的addInterceptors
 	 */
 	protected void addInterceptors(InterceptorRegistry registry) {
 	}
@@ -810,7 +811,7 @@ public class WebMvcConfigurationSupport implements ApplicationContextAware, Serv
 		else if (jaxb2Present) {
 			messageConverters.add(new Jaxb2RootElementHttpMessageConverter());
 		}
-
+		// springboot会引入jackson的包 自动注册json转换器
 		if (jackson2Present) {
 			Jackson2ObjectMapperBuilder builder = Jackson2ObjectMapperBuilder.json();
 			if (this.applicationContext != null) {

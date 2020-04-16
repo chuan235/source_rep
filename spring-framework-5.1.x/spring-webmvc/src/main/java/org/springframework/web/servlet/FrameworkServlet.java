@@ -691,7 +691,7 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 		wac.setServletContext(getServletContext());
 		wac.setServletConfig(getServletConfig());
 		wac.setNamespace(getNamespace());
-		// 添加了一个容器刷新的监听器
+		// 添加了一个容器刷新的监听器  当容器刷新完成后 由DispatcherServlet去初始化SpringMVC组件
 		wac.addApplicationListener(new SourceFilteringListener(wac, new ContextRefreshListener()));
 
 		// The wac environment's #initPropertySources will be called in any case when the context
@@ -883,6 +883,7 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 			throws ServletException, IOException {
 
 		HttpMethod httpMethod = HttpMethod.resolve(request.getMethod());
+		// 增加对HttpMethod.PATCH的支持
 		if (httpMethod == HttpMethod.PATCH || httpMethod == null) {
 			processRequest(request, response);
 		}
@@ -994,39 +995,41 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 	 */
 	protected final void processRequest(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-
+		// start time
 		long startTime = System.currentTimeMillis();
 		Throwable failureCause = null;
-
+		// 之前的请求环境
 		LocaleContext previousLocaleContext = LocaleContextHolder.getLocaleContext();
+		// 当前的请求环境
 		LocaleContext localeContext = buildLocaleContext(request);
-
+		// 之前请求参数
 		RequestAttributes previousAttributes = RequestContextHolder.getRequestAttributes();
+		// 当前的请求参数
 		ServletRequestAttributes requestAttributes = buildRequestAttributes(request, response, previousAttributes);
-
+		// 异步servlet的管理器
 		WebAsyncManager asyncManager = WebAsyncUtils.getAsyncManager(request);
+		// 注册回调处理器
 		asyncManager.registerCallableInterceptor(FrameworkServlet.class.getName(), new RequestBindingInterceptor());
-
+		// 将请求与当前线程绑定
 		initContextHolders(request, localeContext, requestAttributes);
-
 		try {
+			// 处理请求
 			doService(request, response);
-		}
-		catch (ServletException | IOException ex) {
+		}catch (ServletException | IOException ex) {
 			failureCause = ex;
 			throw ex;
-		}
-		catch (Throwable ex) {
+		}catch (Throwable ex) {
 			failureCause = ex;
 			throw new NestedServletException("Request processing failed", ex);
-		}
-
-		finally {
+		}finally {
+			// 与当前线程解绑
 			resetContextHolders(request, previousLocaleContext, previousAttributes);
 			if (requestAttributes != null) {
 				requestAttributes.requestCompleted();
 			}
+			// 处理结果日志的输出
 			logResult(request, response, failureCause, asyncManager);
+			// 发布ServletRequestHandledEvent - Spring中的第二种事件
 			publishRequestHandledEvent(request, response, startTime, failureCause);
 		}
 	}
@@ -1191,7 +1194,7 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 	 * only, delegating to {@code onApplicationEvent} on the FrameworkServlet instance.
 	 */
 	private class ContextRefreshListener implements ApplicationListener<ContextRefreshedEvent> {
-
+		// FrameworkServlet 监听容器刷新完成的事件
 		@Override
 		public void onApplicationEvent(ContextRefreshedEvent event) {
 			FrameworkServlet.this.onApplicationEvent(event);
