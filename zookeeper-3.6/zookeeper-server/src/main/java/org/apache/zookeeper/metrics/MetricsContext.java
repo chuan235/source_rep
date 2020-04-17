@@ -27,9 +27,11 @@ package org.apache.zookeeper.metrics;
  * it to gather metrics for every other peer.
  * </p>
  * <p>
- * Contexts are organized in a hierarchy.
+ * Contexts are organized in a hierarchy. 上下文按层次结构组织
  * </p>
- *
+ * MetricsContext就像度量标准的名称空间。 每个组件/子模块将具有其自己的MetricsContext。
+ *  在某些情况下，有可能为组件的每个实例提供单独的MetricsContext
+ *  例如，在服务器端可能有一个用例，它可以为每个其他对等方收集指标。
  */
 public interface MetricsContext {
 

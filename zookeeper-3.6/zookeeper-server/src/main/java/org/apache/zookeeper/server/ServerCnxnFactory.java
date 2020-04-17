@@ -159,10 +159,15 @@ public abstract class ServerCnxnFactory {
 
     public static ServerCnxnFactory createFactory() throws IOException {
         String serverCnxnFactoryName = System.getProperty(ZOOKEEPER_SERVER_CNXN_FACTORY);
+        // 可以通过 zookeeper.serverCnxnFactory 启动参数指定使用哪一种ServerCnxnFactory
+        // 默认没有指定，这里是null
+        System.out.println("createFactory ServerCnxnFactory -> " + serverCnxnFactoryName);
         if (serverCnxnFactoryName == null) {
+            // NIOServerCnxnFactory
             serverCnxnFactoryName = NIOServerCnxnFactory.class.getName();
         }
         try {
+            // 构建 NIOServerCnxnFactory 对象
             ServerCnxnFactory serverCnxnFactory = (ServerCnxnFactory) Class.forName(serverCnxnFactoryName)
                                                                            .getDeclaredConstructor()
                                                                            .newInstance();

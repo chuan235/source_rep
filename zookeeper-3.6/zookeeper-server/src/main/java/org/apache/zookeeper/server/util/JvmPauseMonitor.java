@@ -41,6 +41,9 @@ import org.slf4j.LoggerFactory;
  * than its target time, it implies that the JVM or host machine has
  * paused processing, which may cause other problems. If such a pause is
  * detected, the thread logs a message.
+ * 设置简单线程的类，该线程在短时间内休眠的循环中运行。
+ * 如果睡眠时间明显长于其目标时间，则表明JVM或主机已暂停处理，这可能会导致其他问题。
+ * 如果检测到这种暂停，线程将记录一条消息。
  */
 public class JvmPauseMonitor {
 

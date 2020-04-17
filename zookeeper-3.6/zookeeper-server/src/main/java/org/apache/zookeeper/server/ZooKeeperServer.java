@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import javax.management.JMX;
 import javax.security.sasl.SaslException;
 import org.apache.jute.BinaryInputArchive;
 import org.apache.jute.BinaryOutputArchive;
@@ -119,11 +120,11 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     static {
         LOG = LoggerFactory.getLogger(ZooKeeperServer.class);
-
+        // 打印banner
         ZookeeperBanner.printBanner(LOG);
 
         Environment.logEnv("Server environment:", LOG);
-
+        // 跳过acl的检查
         enableEagerACLCheck = Boolean.getBoolean(ENABLE_EAGER_ACL_CHECK);
         LOG.info("{} = {}", ENABLE_EAGER_ACL_CHECK, enableEagerACLCheck);
 
@@ -649,33 +650,41 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     public void startdata() throws IOException, InterruptedException {
         //check to see if zkDb is not null
         if (zkDb == null) {
+            // 初始化
             zkDb = new ZKDatabase(this.txnLogFactory);
         }
         if (!zkDb.isInitialized()) {
+            // 如果ZKDatabase没有初始化,就在这里初始化
             loadData();
         }
     }
 
     public synchronized void startup() {
         if (sessionTracker == null) {
+            // SessionTrackerImpl就是一个session的检查器,检查session是否超时
+            // sessionTracker 也是一个线程
             createSessionTracker();
         }
+        // 开启sessionTracker
         startSessionTracker();
+        // 初始化请求处理器链
+        // request -> [ PrepRequestProcessor => SyncRequestProcessor => FinalRequestProcessor ] -> response
         setupRequestProcessors();
-
+        // 开启处理请求的阈值（开启后会限制提交给请求处理器管道的未完成请求数量）
         startRequestThrottler();
-
+        // 注册JMX java的管理扩展  主要用于系统监控（jConsole）
+        // JMX参考： https://www.jianshu.com/p/8c5133cab858
         registerJMX();
-
+        // 注册JVM暂停监控
         startJvmPauseMonitor();
-
+        // Zookeeper的监听指标
         registerMetrics();
-
+        // 正在运行状态
         setState(State.RUNNING);
-
         requestPathMetricsCollector.start();
-
+        // 默认false
         localSessionEnabled = sessionTracker.isLocalSessionsEnabled();
+        // 唤醒ZookeeperServer
         notifyAll();
     }
 
@@ -691,6 +700,14 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     }
 
+    /**
+     * 初始化请求处理链
+     * 不同的角色会构建不同的请求处理器链
+     * Leader
+     * Follower
+     * Observer
+     * ReadOnlyZookeeperServer
+     */
     protected void setupRequestProcessors() {
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         RequestProcessor syncProcessor = new SyncRequestProcessor(this, finalProcessor);

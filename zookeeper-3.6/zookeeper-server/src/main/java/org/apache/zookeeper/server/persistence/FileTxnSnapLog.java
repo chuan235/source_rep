@@ -104,15 +104,15 @@ public class FileTxnSnapLog {
     }
 
     /**
-     * the constructor which takes the datadir and
-     * snapdir.
-     * @param dataDir the transaction directory
-     * @param snapDir the snapshot directory
+     * the constructor which takes the datadir and snapdir.
+     * @param dataDir the trasaction directory  dataLogDir
+     * @param snapDir the snapshot directory    dataDir
      */
     public FileTxnSnapLog(File dataDir, File snapDir) throws IOException {
-        LOG.debug("Opening datadir:{} snapDir:{}", dataDir, snapDir);
-
+        LOG.debug("Opening 日志地址:{} 快照地址:{}", dataDir, snapDir);
+        // 数据地址 version-xx
         this.dataDir = new File(dataDir, version + VERSION);
+        // 快照的地址 version-2
         this.snapDir = new File(snapDir, version + VERSION);
 
         // by default create snap/log dirs, but otherwise complain instead

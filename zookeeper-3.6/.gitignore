@@ -49,9 +49,7 @@ classes
 
 # Other
 *~
-logs/
 *.out
-*.log
 *.bak
 *.tmp
 tmp/**

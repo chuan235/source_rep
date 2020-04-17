@@ -84,8 +84,8 @@ public class ContainerManager {
     }
 
     /**
-     * start/restart the timer the runs the check. Can safely be called
-     * multiple times.
+     * start/restart the timer the runs the check. Can safely be called multiple times.
+     * 检查器
      */
     public void start() {
         if (task.get() == null) {

@@ -56,6 +56,22 @@ import org.slf4j.LoggerFactory;
  * that connection is closed and flagged as invalid. All subsequent requests
  * inflight from that connection are then dropped as well.
  */
+
+/**
+ * 作用：RequestThrottler会限制当前提交给请求处理器管道的未完成请求的数量
+ * 使用：在NIOServerCnxn或者NettyServerCnxn中，通过 globalOutstandingLimit 来限制提交的请求
+ * 一旦达到请求限制，连接层限制将通过禁用连接来对TCP连接实施反压
+ * 但是，连接层始终允许连接在禁用对该连接的选择之前发送至少一个请求
+ * 因此，在具有40000个客户端连接的方案中，即使 globalOustandingLimit 设置较低，正在进行的请求总数也可能高达40000。
+ *  RequestThrottler通过添加其他队列来解决此问题。启用后，客户端连接不再将请求直接提交到请求处理器管道，而是提交给RequestThrottler。
+ *  然后，RequestThrottler负责向请求处理器发出请求，并强制执行单独的 maxRequests 限制
+ *  如果未完成的请求总数大于 maxRequests 则调节器将持续停顿 stallTime 毫秒，直到达到限制。
+ *  RequestThrottler还可以选择丢弃过时的请求，而不是将其提交到处理器管道。
+ *  过时的请求：已关闭的连接发送的请求，请求的等待时间高于其关联的session的超时时间
+ *   过时的概念是可以配置的  参考：org.apache.zookeeper.server.Request
+ *  为了确保顺序保证，如果从连接中删除了请求，则该连接将关闭并标记为无效
+ *   然后，该连接中所有正在进行的后续请求也将被丢弃
+ */
 public class RequestThrottler extends ZooKeeperCriticalThread {
 
     private static final Logger LOG = LoggerFactory.getLogger(RequestThrottler.class);

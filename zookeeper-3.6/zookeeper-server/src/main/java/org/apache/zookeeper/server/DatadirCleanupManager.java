@@ -103,6 +103,7 @@ public class DatadirCleanupManager {
         }
 
         timer = new Timer("PurgeTask", true);
+        // 请求快照和事务日志记录  在这期间新生成的快照和日志不在清除范围之内
         TimerTask task = new PurgeTask(dataLogDir, snapDir, snapRetainCount);
         timer.scheduleAtFixedRate(task, 0, TimeUnit.HOURS.toMillis(purgeInterval));
 

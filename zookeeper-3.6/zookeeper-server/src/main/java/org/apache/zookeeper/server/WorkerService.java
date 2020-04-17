@@ -65,8 +65,8 @@ public class WorkerService {
      *                              individually assignable or not
      */
     public WorkerService(String name, int numThreads, boolean useAssignableThreads) {
-        this.threadNamePrefix = (name == null ? "" : name) + "Thread";
-        this.numWorkerThreads = numThreads;
+        this.threadNamePrefix = (name == null ? "" : name) + "Thread"; // NIOWorkerThread
+        this.numWorkerThreads = numThreads;//16
         this.threadsAreAssignable = useAssignableThreads;
         start();
     }

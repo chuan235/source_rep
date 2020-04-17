@@ -353,6 +353,8 @@
         <!-- parameter to pass to C client build -->
         <c-client-openssl>yes</c-client-openssl>
 
+        <mvngit.commit.id>2</mvngit.commit.id>
+        <build.time>2019-9-9</build.time>
     </properties>
 
     <dependencyManagement>

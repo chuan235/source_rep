@@ -639,23 +639,26 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         maxClientCnxns = maxcc;
         initMaxCnxns();
         sessionlessCnxnTimeout = Integer.getInteger(ZOOKEEPER_NIO_SESSIONLESS_CNXN_TIMEOUT, 10000);
-        // We also use the sessionlessCnxnTimeout as expiring interval for
-        // cnxnExpiryQueue. These don't need to be the same, but the expiring
-        // interval passed into the ExpiryQueue() constructor below should be
-        // less than or equal to the timeout.
+        // We also use the sessionlessCnxnTimeout as expiring interval for cnxnExpiryQueue.
+        // These don't need to be the same, but the expiring
+        // interval passed into the ExpiryQueue() constructor below should be less than or equal to the timeout.
+        // 队列到期间隔时间 sessionlessCnxnTimeout
         cnxnExpiryQueue = new ExpiryQueue<NIOServerCnxn>(sessionlessCnxnTimeout);
+        // 初始化expirerThread
         expirerThread = new ConnectionExpirerThread();
-
+        // 获取系统的核数
         int numCores = Runtime.getRuntime().availableProcessors();
         // 32 cores sweet spot seems to be 4 selector threads
+        // 32核最合适的是4个selector线程  32/2在开方  8核对应2个selector线程
         numSelectorThreads = Integer.getInteger(
             ZOOKEEPER_NIO_NUM_SELECTOR_THREADS,
             Math.max((int) Math.sqrt((float) numCores / 2), 1));
         if (numSelectorThreads < 1) {
             throw new IOException("numSelectorThreads must be at least 1");
         }
-
+        // 处理请求的线程数 2 * numCores  8核->16个线程
         numWorkerThreads = Integer.getInteger(ZOOKEEPER_NIO_NUM_WORKER_THREADS, 2 * numCores);
+        // 工作线程的超时时间5秒
         workerShutdownTimeoutMS = Long.getLong(ZOOKEEPER_NIO_SHUTDOWN_TIMEOUT, 5000);
 
         String logMsg = "Configuring NIO connection handler with "
@@ -664,20 +667,24 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             + (numWorkerThreads > 0 ? numWorkerThreads : "no") + " worker threads, and "
             + (directBufferBytes == 0 ? "gathered writes." : ("" + (directBufferBytes / 1024) + " kB direct buffers."));
         LOG.info(logMsg);
+        // 初始化selector线程
         for (int i = 0; i < numSelectorThreads; ++i) {
             selectorThreads.add(new SelectorThread(i));
         }
-
         listenBacklog = backlog;
+        // 开启socketChannel
         this.ss = ServerSocketChannel.open();
         ss.socket().setReuseAddress(true);
-        LOG.info("binding to port {}", addr);
+        System.out.println("zk服务绑定到 binding to port "+ addr);
+        // 绑定ip和端口
         if (listenBacklog == -1) {
             ss.socket().bind(addr);
         } else {
             ss.socket().bind(addr, listenBacklog);
         }
+        // 设置为非阻塞
         ss.configureBlocking(false);
+        // 初始化接收请求的线程
         acceptThread = new AcceptThread(ss, addr, selectorThreads);
     }
 
@@ -734,17 +741,21 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     public void start() {
         stopped = false;
         if (workerPool == null) {
+            // 处理客户端请求的线程服务类  里面有一个线程池
             workerPool = new WorkerService("NIOWorker", numWorkerThreads, false);
         }
+        // 确保所有的selector线程都只启动一次   这个selector线程的数量默认是根据操作系统的核计算出来的  Math.sqrt(核数/2, 1)
         for (SelectorThread thread : selectorThreads) {
             if (thread.getState() == Thread.State.NEW) {
                 thread.start();
             }
         }
+        // 接收请求的线程
         // ensure thread is started once and only once
         if (acceptThread.getState() == Thread.State.NEW) {
             acceptThread.start();
         }
+        // 验证连接的请求
         if (expirerThread.getState() == Thread.State.NEW) {
             expirerThread.start();
         }
@@ -752,10 +763,14 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
 
     @Override
     public void startup(ZooKeeperServer zks, boolean startServer) throws IOException, InterruptedException {
+        // NIOServerCnxnFactory#start 初始化并启动客户端监听线程
         start();
+        // 设置属性
         setZooKeeperServer(zks);
         if (startServer) {
+            // 初始化ZKDatabase
             zks.startdata();
+            // 启动Zkserver服务
             zks.startup();
         }
     }
