@@ -58,6 +58,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
+// zookeeper集群配置文件对应的类
 @InterfaceAudience.Public
 public class QuorumPeerConfig {
 

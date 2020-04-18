@@ -188,6 +188,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             selectorIterator = this.selectorThreads.iterator();
         }
 
+        /**
+         * 接受连接请求
+         */
         public void run() {
             try {
                 while (!stopped && !acceptSocket.socket().isClosed()) {
@@ -217,21 +220,19 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         private void select() {
             try {
                 selector.select();
-
+                // 遍历所有的selector  检查是否存在Accept事件
                 Iterator<SelectionKey> selectedKeys = selector.selectedKeys().iterator();
                 while (!stopped && selectedKeys.hasNext()) {
                     SelectionKey key = selectedKeys.next();
                     selectedKeys.remove();
-
                     if (!key.isValid()) {
                         continue;
                     }
                     if (key.isAcceptable()) {
+                        // 处理accept事件
                         if (!doAccept()) {
-                            // If unable to pull a new connection off the accept
-                            // queue, pause accepting to give us time to free
-                            // up file descriptors and so the accept thread
-                            // doesn't spin in a tight loop.
+                            // If unable to pull a new connection off the accept queue, pause accepting to give us time to free
+                            // up file descriptors and so the accept thread doesn't spin in a tight loop.
                             pauseAccept(10);
                         }
                     } else {
@@ -278,21 +279,23 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 }
                 InetAddress ia = sc.socket().getInetAddress();
                 int cnxncount = getClientCnxnCount(ia);
-
                 if (maxClientCnxns > 0 && cnxncount >= maxClientCnxns) {
                     throw new IOException("Too many connections from " + ia + " - max is " + maxClientCnxns);
                 }
-
+                System.out.println("接收来自"+sc.socket().getRemoteSocketAddress()+"的连接");
                 LOG.debug("Accepted socket connection from {}", sc.socket().getRemoteSocketAddress());
-
+                // 设置为非阻塞
                 sc.configureBlocking(false);
 
                 // Round-robin assign this connection to a selector thread
+                // 将请求丢给随机的一个SelectorThread
                 if (!selectorIterator.hasNext()) {
                     selectorIterator = selectorThreads.iterator();
                 }
                 SelectorThread selectorThread = selectorIterator.next();
+                // 将请求入队  acceptedQueue
                 if (!selectorThread.addAcceptedConnection(sc)) {
+                    // 队列满了
                     throw new IOException("Unable to add connection to selector queue"
                                           + (stopped ? " (shutdown in progress)" : ""));
                 }
@@ -326,8 +329,13 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
      * work is complete, the connection is placed on the ready queue to have
      * its interest ops restored and resume selection.
      *
-     * If there is no worker thread pool, the SelectorThread performs the I/O
-     * directly.
+     * If there is no worker thread pool, the SelectorThread performs the I/O directly.
+     *
+     * 1、SelectorThread从AcceptThread接收新的连接请求，该线程是唯一对selector 进行注册新连接和感兴趣事件的线程
+     * 2、将一个请求连接分配给一个SelectorThread是永久的，这有这个SelectorThread会与该连接进行交互
+     * 3、如果存在工作线程池，当连接具有IO执行时，SelectorThread会在Selector中清除已绑定的感兴趣的事件，将连接交给工作线程进行处理
+     *     当处理完成之后，连接被放入就绪队列，恢复其感兴趣的事件和selection
+     * 4、如果没有工作线程池，则SelectorThread将直接执行 I/O
      */
     class SelectorThread extends AbstractSelectThread {
 
@@ -362,9 +370,11 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
          * operations are happening.
          */
         public boolean addInterestOpsUpdateRequest(SelectionKey sk) {
+            // offer方法在队列满了的时候  直接返回false
             if (stopped || !updateQueue.offer(sk)) {
                 return false;
             }
+            // selector.wakeup()
             wakeupSelector();
             return true;
         }
@@ -379,8 +389,11 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             try {
                 while (!stopped) {
                     try {
+                        // 这里面处理读或者写  IO
                         select();
+                        // 处理Accept
                         processAcceptedConnections();
+                        // 注册感兴趣的事件
                         processInterestOpsUpdateRequests();
                     } catch (RuntimeException e) {
                         LOG.warn("Ignoring unexpected runtime exception", e);
@@ -389,10 +402,11 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                     }
                 }
 
-                // Close connections still pending on the selector. Any others
-                // with in-flight work, let drain out of the work queue.
+                // Close connections still pending on the selector. Any others with in-flight work, let drain out of the work queue.
+                // 跑到这里说明当前的关闭在selector上挂起的连接，这里的NIOServerCnxn也要关闭
                 for (SelectionKey key : selector.keys()) {
                     NIOServerCnxn cnxn = (NIOServerCnxn) key.attachment();
+                    // 清除掉 SelectionKey
                     if (cnxn.isSelectable()) {
                         cnxn.close(ServerCnxn.DisconnectReason.SERVER_SHUTDOWN);
                     }
@@ -400,6 +414,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 }
                 SocketChannel accepted;
                 while ((accepted = acceptedQueue.poll()) != null) {
+                    // close socket
                     fastCloseSock(accepted);
                 }
                 updateQueue.clear();
@@ -429,6 +444,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                         continue;
                     }
                     if (key.isReadable() || key.isWritable()) {
+                        // 存在IO
                         handleIO(key);
                     } else {
                         LOG.warn("Unexpected ops in select {}", key.readyOps());
@@ -440,19 +456,21 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         }
 
         /**
-         * Schedule I/O for processing on the connection associated with
-         * the given SelectionKey. If a worker thread pool is not being used,
-         * I/O is run directly by this thread.
+         * Schedule I/O for processing on the connection associated with the given SelectionKey.
+         * If a worker thread pool is not being used,I/O is run directly by this thread.
+         *
          */
         private void handleIO(SelectionKey key) {
             IOWorkRequest workRequest = new IOWorkRequest(this, key);
             NIOServerCnxn cnxn = (NIOServerCnxn) key.attachment();
 
-            // Stop selecting this key while processing on its
-            // connection
+            // Stop selecting this key while processing on its connection
+            // 暂停当前连接的selectorThread，确保后面的请求处理时不会再来一个请求把当前的覆盖了
             cnxn.disableSelectable();
+            // 0表示对任何事件都不感兴趣 NIO：https://www.cnblogs.com/sally-zhou/p/6624901.html
             key.interestOps(0);
             touchCnxn(cnxn);
+            // 将这个请求交给工作线程池
             workerPool.schedule(workRequest);
         }
 
@@ -466,7 +484,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 SelectionKey key = null;
                 try {
                     key = accepted.register(selector, SelectionKey.OP_READ);
+                    // 没接收一个请求就创建一个 NIOServerCnxn
                     NIOServerCnxn cnxn = createConnection(accepted, key, this);
+                    // 将SelectionKey与NIOServerCnxn关联起来
                     key.attach(cnxn);
                     addCnxn(cnxn);
                 } catch (IOException e) {
@@ -478,8 +498,8 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         }
 
         /**
-         * Iterate over the queue of connections ready to resume selection,
-         * and restore their interest ops selection mask.
+         * Iterate over the queue of connections ready to resume selection,and restore their interest ops selection mask.
+         * 遍历ConnectionQueue并且注册NIOServerCnxn感兴趣的事件
          */
         private void processInterestOpsUpdateRequests() {
             SelectionKey key;

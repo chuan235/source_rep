@@ -727,9 +727,11 @@ public class NIOServerCnxn extends ServerCnxn {
             return 0;
         }
         int interestOps = 0;
+        // throttled为true时
         if (getReadInterest()) {
             interestOps |= SelectionKey.OP_READ;
         }
+        // outgoingBuffers不为空
         if (getWriteInterest()) {
             interestOps |= SelectionKey.OP_WRITE;
         }

@@ -179,6 +179,9 @@ public class JvmPauseMonitor {
 
     }
 
+    /**
+     * 使用MXBeans进行gc时长的收集
+     */
     private class JVMMonitor implements Runnable {
 
         @Override

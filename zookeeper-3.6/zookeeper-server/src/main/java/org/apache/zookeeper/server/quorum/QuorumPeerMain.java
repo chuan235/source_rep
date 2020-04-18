@@ -138,9 +138,8 @@ public class QuorumPeerMain {
             config.getDataLogDir(),
             config.getSnapRetainCount(),
             config.getPurgeInterval());
-        // 启动数据恢复/加载 线程
+        // 启动数据清理 线程
         purgeMgr.start();
-
         if (args.length == 1 && config.isDistributed()) {
             // 根据配置信息去运行server集群
             runFromConfig(config);

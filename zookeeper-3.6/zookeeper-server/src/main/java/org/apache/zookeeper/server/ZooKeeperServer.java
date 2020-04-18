@@ -675,7 +675,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // 注册JMX java的管理扩展  主要用于系统监控（jConsole）
         // JMX参考： https://www.jianshu.com/p/8c5133cab858
         registerJMX();
-        // 注册JVM暂停监控
+        // JVM gc时长收集器
         startJvmPauseMonitor();
         // Zookeeper的监听指标
         registerMetrics();

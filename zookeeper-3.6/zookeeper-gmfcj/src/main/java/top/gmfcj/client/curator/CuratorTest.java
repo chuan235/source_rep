@@ -8,6 +8,7 @@ import org.apache.curator.framework.api.BackgroundCallback;
 import org.apache.curator.framework.api.CuratorEvent;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.data.Stat;
 import sun.print.BackgroundLookupListener;
 import top.gmfcj.client.zookeeper.ZookeeperClientTest;
@@ -59,7 +60,18 @@ public class CuratorTest {
 
     public static void step1(CuratorFramework client) throws Exception {
         // 增加删除节点
-        client.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath("/super/c1","c1内容".getBytes());
+        client.create()
+                .withTtl(3000)
+                .creatingParentsIfNeeded()
+                .withMode(CreateMode.EPHEMERAL)
+                .withACL(ZooDefs.Ids.OPEN_ACL_UNSAFE)
+                .forPath("/super/c1","c1内容".getBytes());
+
+        client.create()
+                .creatingParentContainersIfNeeded()
+                .withMode(CreateMode.CONTAINER)
+                .withACL(ZooDefs.Ids.READ_ACL_UNSAFE)
+                .forPath("/super/c2","c2容器节点".getBytes());
         // 读取节点
         System.out.println("创建节点完成，节点内容"+new String(client.getData().forPath("/super/c1")));
         // 修改节点
@@ -68,7 +80,9 @@ public class CuratorTest {
         client.delete().deletingChildrenIfNeeded().forPath("/super/c1");
         System.out.println("节点已删除");
         // 绑定回调函数
-        client.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT)
+        client.create()
+                .creatingParentsIfNeeded()
+                .withMode(CreateMode.PERSISTENT)
                 // callback callback+executor
                 .inBackground(
                         (CuratorFramework curatorFramework, CuratorEvent curatorEvent) -> {
@@ -77,5 +91,19 @@ public class CuratorTest {
                         }
                 )
                 .forPath("/super/c2","c2内容".getBytes());
+
+
+        // 检查一个节点是否存在
+        Stat existStat = client.checkExists().forPath("/super/c1");
+        if(existStat == null){
+            System.out.println("节点不存在");
+        }
+        if(existStat.getEphemeralOwner() > 0){
+            System.out.println("临时节点");
+        }else{
+            System.out.println("持久节点");
+        }
     }
+
+
 }

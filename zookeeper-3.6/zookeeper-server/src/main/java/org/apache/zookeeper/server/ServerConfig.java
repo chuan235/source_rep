@@ -29,7 +29,7 @@ import org.apache.zookeeper.server.quorum.QuorumPeerConfig.ConfigException;
 
 /**
  * Server configuration storage.
- *
+ * Zookeeper单机配置类
  * We use this instead of Properties as it's typed.
  *
  */

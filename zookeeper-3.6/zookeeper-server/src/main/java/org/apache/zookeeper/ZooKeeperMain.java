@@ -71,7 +71,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The command line client to ZooKeeper.
+ * The command line client to ZooKeeper.  Zookeeper的客户端
  *
  */
 @InterfaceAudience.Public
@@ -233,11 +233,13 @@ public class ZooKeeperMain {
          * @return true if parsing succeeded.
          */
         public boolean parseCommand(String cmdstring) {
+            // 验证格式是否正确   command arg1 arg2 ...
             Matcher matcher = ARGS_PATTERN.matcher(cmdstring);
 
             List<String> args = new LinkedList<String>();
             while (matcher.find()) {
                 String value = matcher.group(1);
+                // -server  -timeout 分割参数
                 if (QUOTED_PATTERN.matcher(value).matches()) {
                     // Strip off the surrounding quotes
                     value = value.substring(1, value.length() - 1);
@@ -247,6 +249,7 @@ public class ZooKeeperMain {
             if (args.isEmpty()) {
                 return false;
             }
+            // 获取到命令和参数
             command = args.get(0);
             cmdArgs = args;
             return true;
@@ -305,13 +308,15 @@ public class ZooKeeperMain {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        // 解析参数  连接zookeeper服务器  -server
         ZooKeeperMain main = new ZooKeeperMain(args);
+        // 启动客户端
         main.run();
     }
 
     public ZooKeeperMain(String[] args) throws IOException, InterruptedException {
         cl.parseOptions(args);
-        System.out.println("Connecting to " + cl.getOption("server"));
+        System.out.println("连接到zookeeper服务器 --- Connecting to " + cl.getOption("server"));
         connectToZK(cl.getOption("server"));
     }
 
@@ -332,13 +337,14 @@ public class ZooKeeperMain {
                 System.out.println("JLine support is enabled");
 
                 Object console = consoleC.getConstructor().newInstance();
-
                 Object completor = completorC.getConstructor(ZooKeeper.class).newInstance(zk);
                 Method addCompletor = consoleC.getMethod("addCompleter", Class.forName("jline.console.completer.Completer"));
+                // 调出console面板控制台
                 addCompletor.invoke(console, completor);
-
                 String line;
+                // 读取一行的方法
                 Method readLine = consoleC.getMethod("readLine", String.class);
+                // 回调处理命令
                 while ((line = (String) readLine.invoke(console, getPrompt())) != null) {
                     executeLine(line);
                 }
@@ -370,9 +376,13 @@ public class ZooKeeperMain {
 
     public void executeLine(String line) throws InterruptedException, IOException {
         if (!line.equals("")) {
+            // 解析命令
             cl.parseCommand(line);
+            // 缓存命令
             addToHistory(commandCount, line);
+            // 处理命令
             processCmd(cl);
+            // 统计命令
             commandCount++;
         }
     }
@@ -380,6 +390,7 @@ public class ZooKeeperMain {
     protected boolean processCmd(MyCommandOptions co) throws IOException, InterruptedException {
         boolean watch = false;
         try {
+            // 处理命令
             watch = processZKCmd(co);
             exitCode = ExitCode.EXECUTION_FINISHED.getValue();
         } catch (CliException ex) {
@@ -434,6 +445,7 @@ public class ZooKeeperMain {
                 printWatches = args[1].equals("on");
             }
         } else if (cmd.equals("connect")) {
+            // 第一次解析参数后去进入这里发起连接请求
             if (args.length >= 2) {
                 connectToZK(args[1]);
             } else {
@@ -446,11 +458,12 @@ public class ZooKeeperMain {
             System.out.println("Not connected");
             return false;
         }
-
+        // 命令转为Request发送给服务器
         // execute from commandMap
         CliCommand cliCmd = commandMapCli.get(cmd);
         if (cliCmd != null) {
             cliCmd.setZk(zk);
+            // ZooKeeper#create
             watch = cliCmd.parse(args).exec();
         } else if (!commandMap.containsKey(cmd)) {
             usage();
