@@ -38,16 +38,19 @@ import org.slf4j.LoggerFactory;
  * until its log has been synced to disk.
  *
  * SyncRequestProcessor is used in 3 different cases
- * 1. Leader - Sync request to disk and forward it to AckRequestProcessor which
- *             send ack back to itself.
- * 2. Follower - Sync request to disk and forward request to
- *             SendAckRequestProcessor which send the packets to leader.
- *             SendAckRequestProcessor is flushable which allow us to force
- *             push packets to leader.
+ * 1. Leader - Sync request to disk and forward it to AckRequestProcessor which send ack back to itself.
+ *              将请求写入磁盘，并将请求转发到 AckRequestProcessor ，将ACK发回给自己
+ * 2. Follower - Sync request to disk and forward request to SendAckRequestProcessor which send the packets to leader.
+ *             SendAckRequestProcessor is flushable which allow us to force push packets to leader.
+ *              将请求写入磁盘，并将请求转发到 SendAckRequestProcessor ，将数据包发送给Leader
+ *              SendAckRequestProcessor 是可以刷新的，这使得可以强制将数据包推送给Leader
+ *
  * 3. Observer - Sync committed request to disk (received as INFORM packet).
- *             It never send ack back to the leader, so the nextProcessor will
- *             be null. This change the semantic of txnlog on the observer
- *             since it only contains committed txns.
+ *             It never send ack back to the leader, so the nextProcessor will be null. This change the semantic of txnlog on the observer since it only contains committed txns.
+ *              会将提交的请求同步到磁盘（作为Inform数据包接收）
+ *              它永远不会将确认发送回给Leader，因此nextProcessor将为null。
+ *              因为它只包含提交的txns，所以这改变了observer 上的txnlog语义
+ *
  */
 public class SyncRequestProcessor extends ZooKeeperCriticalThread implements RequestProcessor {
 
@@ -155,9 +158,10 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
     @Override
     public void run() {
         try {
-            // we do this in an attempt to ensure that not all of the servers
-            // in the ensemble take a snapshot at the same time
+            // we do this in an attempt to ensure that not all of the servers in the ensemble take a snapshot at the same time
+            // 设置 randRoll 的值 0 ~ snapCount/2
             resetSnapshotStats();
+            // 记录下最后一次刷新的时间
             lastFlushTime = Time.currentElapsedTime();
             while (true) {
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_SIZE.add(queuedRequests.size());
@@ -166,6 +170,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 Request si = queuedRequests.poll(pollTime, TimeUnit.MILLISECONDS);
                 if (si == null) {
                     /* We timed out looking for more writes to batch, go ahead and flush immediately */
+                    // 刷新 toFlush 中的Request
                     flush();
                     si = queuedRequests.take();
                 }
@@ -178,8 +183,10 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_TIME.add(startProcessTime - si.syncQueueStartTime);
 
                 // track the number of records written to the log
+                // 将数据写入日志
                 if (zks.getZKDatabase().append(si)) {
                     if (shouldSnapshot()) {
+                        // 满足创建快照的条件时，会创建一个snap
                         resetSnapshotStats();
                         // roll the log
                         zks.getZKDatabase().rollLog();
@@ -187,9 +194,12 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                         if (!snapThreadMutex.tryAcquire()) {
                             LOG.warn("Too busy to snap, skipping");
                         } else {
+                            // 创建一个 Snapshot Thread 线程来创建快照
                             new ZooKeeperThread("Snapshot Thread") {
+                                @Override
                                 public void run() {
                                     try {
+                                        // 创建快照 将整个ZKDatabase中的数据dataTree序列化到磁盘
                                         zks.takeSnapshot();
                                     } catch (Exception e) {
                                         LOG.warn("Unexpected exception", e);
@@ -202,9 +212,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                     }
                 } else if (toFlush.isEmpty()) {
                     // optimization for read heavy workloads
-                    // iff this is a read, and there are no pending
-                    // flushes (writes), then just pass this to the next
-                    // processor
+                    // iff this is a read, and there are no pending flushes (writes), then just pass this to the next processor
                     if (nextProcessor != null) {
                         nextProcessor.processRequest(si);
                         if (nextProcessor instanceof Flushable) {
@@ -229,10 +237,9 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         if (this.toFlush.isEmpty()) {
             return;
         }
-
         ServerMetrics.getMetrics().BATCH_SIZE.add(toFlush.size());
-
         long flushStartTime = Time.currentElapsedTime();
+        // 提交 就是刷新日志输出流
         zks.getZKDatabase().commit();
         ServerMetrics.getMetrics().SYNC_PROCESSOR_FLUSH_TIME.add(Time.currentElapsedTime() - flushStartTime);
 
@@ -243,6 +250,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 final Request i = this.toFlush.remove();
                 long latency = Time.currentElapsedTime() - i.syncQueueStartTime;
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_AND_FLUSH_TIME.add(latency);
+                // 调用下一个请求处理器 -单机调用->  FinalRequestProcessor#processRequest
                 this.nextProcessor.processRequest(i);
             }
             if (this.nextProcessor instanceof Flushable) {
@@ -252,6 +260,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         }
     }
 
+    @Override
     public void shutdown() {
         LOG.info("Shutting down");
         queuedRequests.add(REQUEST_OF_DEATH);
@@ -271,10 +280,11 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         }
     }
 
+    @Override
     public void processRequest(final Request request) {
         Objects.requireNonNull(request, "Request cannot be null");
-
         request.syncQueueStartTime = Time.currentElapsedTime();
+        // request 加入到阻塞队列 run方法监听这个队列
         queuedRequests.add(request);
         ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUED.add(1);
     }

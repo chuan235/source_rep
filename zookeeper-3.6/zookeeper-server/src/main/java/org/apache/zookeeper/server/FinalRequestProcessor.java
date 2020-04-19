@@ -85,13 +85,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This Request processor actually applies any transaction associated with a
- * request and services any queries. It is always at the end of a
- * RequestProcessor chain (hence the name), so it does not have a nextProcessor
- * member.
+ * This Request processor actually applies any transaction associated with a request and services any queries.
+ * It is always at the end of a RequestProcessor chain (hence the name), so it does not have a nextProcessor member.
  *
- * This RequestProcessor counts on ZooKeeperServer to populate the
- * outstandingRequests member of ZooKeeperServer.
+ *
+ * This RequestProcessor counts on ZooKeeperServer to populate the outstandingRequests member of ZooKeeperServer.
+ *
  */
 public class FinalRequestProcessor implements RequestProcessor {
 
@@ -106,6 +105,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         this.requestPathMetricsCollector = zks.getRequestPathMetricsCollector();
     }
 
+    @Override
     public void processRequest(Request request) {
         LOG.debug("Processing request:: {}", request);
 
@@ -657,6 +657,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         return request.cnxn == null;
     }
 
+    @Override
     public void shutdown() {
         // we are the final link in the chain
         LOG.info("shutdown of request processor complete");

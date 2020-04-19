@@ -151,7 +151,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                 if (killed) {
                     break;
                 }
-
+                // 拿出一个请求
                 Request request = submittedRequests.take();
                 if (Request.requestOfDeath == request) {
                     break;
@@ -187,6 +187,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                     if (request.isStale()) {
                         ServerMetrics.getMetrics().STALE_REQUESTS.add(1);
                     }
+                    // 将请求交给第一个请求处理器
                     zks.submitRequestNow(request);
                 }
             }

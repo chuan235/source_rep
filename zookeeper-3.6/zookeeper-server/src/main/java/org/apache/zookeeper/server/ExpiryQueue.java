@@ -29,24 +29,33 @@ import org.apache.zookeeper.common.Time;
 
 /**
  * ExpiryQueue tracks elements in time sorted fixed duration buckets.
- * It's used by SessionTrackerImpl to expire sessions and NIOServerCnxnFactory
- * to expire connections.
+ * It's used by SessionTrackerImpl to expire sessions and NIOServerCnxnFactory to expire connections.
+ * ExpiryQueue跟踪按时间排序的固定持续时间段中的元素。
+ * SessionTrackerImpl使用它来终止会话，而NIOServerCnxnFactory使用它来终止连接
  */
 public class ExpiryQueue<E> {
 
     private final ConcurrentHashMap<E, Long> elemMap = new ConcurrentHashMap<E, Long>();
     /**
      * The maximum number of buckets is equal to max timeout/expirationInterval,
-     * so the expirationInterval should not be too small compared to the
-     * max timeout that this expiry queue needs to maintain.
+     * so the expirationInterval should not be too small compared to the max timeout that this expiry queue needs to maintain.
+     * 这个集合就是存在在下一个时间点 有那些session要过期
+     * long1 - [session1,session2 ..]
      */
     private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>();
 
+    /**
+     * 下一个过期时间是多少 nextTime = ( curTime/exp + 1) * exp
+     */
     private final AtomicLong nextExpirationTime = new AtomicLong();
+    /**
+     * 时间单位  默认为 2000ms
+     */
     private final int expirationInterval;
 
     public ExpiryQueue(int expirationInterval) {
         this.expirationInterval = expirationInterval;
+        // 下一次的过期时间
         nextExpirationTime.set(roundToNextInterval(Time.currentElapsedTime()));
     }
 
@@ -127,10 +136,10 @@ public class ExpiryQueue<E> {
     }
 
     /**
-     * Remove the next expired set of elements from expireMap. This method needs
-     * to be called frequently enough by checking getWaitTime(), otherwise there
-     * will be a backlog of empty sets queued up in expiryMap.
-     *
+     * Remove the next expired set of elements from expireMap.
+     * This method needs to be called frequently enough by checking getWaitTime(), otherwise there will be a backlog of empty sets queued up in expiryMap.
+     * 从expireMap中拿出下一组过期的session
+     * 通过getWaitTime来频繁的调用这个方法
      * @return next set of expired elements, or an empty set if none are
      *         ready
      */

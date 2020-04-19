@@ -537,6 +537,7 @@ public class FuzzySnapshotRelatedTest extends QuorumPeerTestBase {
                                     self.areLocalSessionsEnabled(),
                                     getZooKeeperServerListener()) {
 
+                                @Override
                                 public synchronized boolean commitSession(
                                         long sessionId, int sessionTimeout) {
                                     if (commitSessionListener != null) {

@@ -269,6 +269,7 @@ public class ZKDatabase {
     }
 
     private final PlayBackListener commitProposalPlaybackListener = new PlayBackListener() {
+        @Override
         public void onTxnLoaded(TxnHeader hdr, Record txn, TxnDigest digest) {
             addCommittedProposal(hdr, txn, digest);
         }

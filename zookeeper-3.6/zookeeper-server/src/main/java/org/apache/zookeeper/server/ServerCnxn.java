@@ -265,6 +265,7 @@ public abstract class ServerCnxn implements Stats, Watcher {
     /* notify the client the session is closing and close/cleanup socket */
     public abstract void sendCloseSession();
 
+    @Override
     public abstract void process(WatchedEvent event);
 
     public abstract long getSessionId();
@@ -323,6 +324,7 @@ public abstract class ServerCnxn implements Stats, Watcher {
             this.reason = reason;
         }
 
+        @Override
         public String toString() {
             return "EndOfStreamException: " + getMessage();
         }
@@ -390,6 +392,7 @@ public abstract class ServerCnxn implements Stats, Watcher {
     protected long requestsProcessedCount;
     protected DisconnectReason disconnectReason = DisconnectReason.UNKNOWN;
 
+    @Override
     public synchronized void resetStats() {
         disconnectReason = DisconnectReason.RESET_COMMAND;
         packetsReceived.set(0);
@@ -435,50 +438,62 @@ public abstract class ServerCnxn implements Stats, Watcher {
         totalLatency += elapsed;
     }
 
+    @Override
     public Date getEstablished() {
         return (Date) established.clone();
     }
 
+    @Override
     public long getOutstandingRequests() {
         return outstandingCount.longValue();
     }
 
+    @Override
     public long getPacketsReceived() {
         return packetsReceived.longValue();
     }
 
+    @Override
     public long getPacketsSent() {
         return packetsSent.longValue();
     }
 
+    @Override
     public synchronized long getMinLatency() {
         return minLatency == Long.MAX_VALUE ? 0 : minLatency;
     }
 
+    @Override
     public synchronized long getAvgLatency() {
         return count == 0 ? 0 : totalLatency / count;
     }
 
+    @Override
     public synchronized long getMaxLatency() {
         return maxLatency;
     }
 
+    @Override
     public synchronized String getLastOperation() {
         return lastOp;
     }
 
+    @Override
     public synchronized long getLastCxid() {
         return lastCxid;
     }
 
+    @Override
     public synchronized long getLastZxid() {
         return lastZxid;
     }
 
+    @Override
     public synchronized long getLastResponseTime() {
         return lastResponseTime;
     }
 
+    @Override
     public synchronized long getLastLatency() {
         return lastLatency;
     }

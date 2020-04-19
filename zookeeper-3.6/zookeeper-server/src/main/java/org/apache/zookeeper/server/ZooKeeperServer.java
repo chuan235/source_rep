@@ -571,6 +571,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     }
 
     private void close(long sessionId) {
+        // 发送closeSession Request
         Request si = new Request(null, sessionId, 0, OpCode.closeSession, null, null);
         submitRequest(si);
     }
@@ -596,6 +597,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         }
     }
 
+    @Override
     public void expire(Session session) {
         long sessionId = session.getSessionId();
         LOG.info(
@@ -707,12 +709,15 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
      * Follower
      * Observer
      * ReadOnlyZookeeperServer
+     * 单机：
+     *  PrepRequestProcessor -> SyncRequestProcessor -> FinalRequestProcessor
      */
     protected void setupRequestProcessors() {
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         RequestProcessor syncProcessor = new SyncRequestProcessor(this, finalProcessor);
         ((SyncRequestProcessor) syncProcessor).start();
         firstProcessor = new PrepRequestProcessor(this, syncProcessor);
+        // 开启第一个处理器线程  运行它的run方法
         ((PrepRequestProcessor) firstProcessor).start();
     }
 
@@ -1063,6 +1068,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         closeSession(cnxn.getSessionId());
     }
 
+    @Override
     public long getServerId() {
         return 0;
     }
@@ -1082,13 +1088,12 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     }
 
     public void enqueueRequest(Request si) {
+        // 提交到 requestThrottler
         if (requestThrottler == null) {
             synchronized (this) {
                 try {
-                    // Since all requests are passed to the request
-                    // processor it should wait for setting up the request
-                    // processor chain. The state will be updated to RUNNING
-                    // after the setup.
+                    // Since all requests are passed to the request processor it should wait for setting up the request processor chain.
+                    // The state will be updated to RUNNING after the setup.
                     while (state == State.INITIAL) {
                         wait(1000);
                     }
@@ -1127,6 +1132,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             boolean validpacket = Request.isValid(si.type);
             if (validpacket) {
                 setLocalSessionFlag(si);
+                // 调用请求处理器链
                 firstProcessor.processRequest(si);
                 if (si.cnxn != null) {
                     incInProcess();
@@ -1549,6 +1555,12 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         }
     }
 
+    /**
+     * ZookeeperServer 处理请求的方法
+     * @param cnxn
+     * @param incomingBuffer
+     * @throws IOException
+     */
     public void processPacket(ServerCnxn cnxn, ByteBuffer incomingBuffer) throws IOException {
         // We have the request, now process and setup for next
         InputStream bais = new ByteBufferInputStream(incomingBuffer);
@@ -1571,6 +1583,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // pointing
         // to the start of the txn
         incomingBuffer = incomingBuffer.slice();
+        // 处理acl
         if (h.getType() == OpCode.auth) {
             LOG.info("got auth packet {}", cnxn.getRemoteSocketAddress());
             AuthPacket authPacket = new AuthPacket();
@@ -1616,6 +1629,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             processSasl(incomingBuffer, cnxn, h);
         } else {
             if (shouldRequireClientSaslAuth() && !hasCnxSASLAuthenticated(cnxn)) {
+                // 需要权限验证
                 ReplyHeader replyHeader = new ReplyHeader(h.getXid(), 0, Code.SESSIONCLOSEDREQUIRESASLAUTH.intValue());
                 cnxn.sendResponse(replyHeader, null, "response");
                 cnxn.sendCloseSession();
@@ -1629,6 +1643,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                     si.setLargeRequestSize(length);
                 }
                 si.setOwner(ServerCnxn.me);
+                // 提交request
                 submitRequest(si);
             }
         }

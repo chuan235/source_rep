@@ -30,8 +30,7 @@ interface Stats {
     Date getEstablished();
 
     /**
-     * The number of requests that have been submitted but not yet
-     * responded to.
+     * The number of requests that have been submitted but not yet responded to.
      */
     long getOutstandingRequests();
     /** Number of packets received */

@@ -47,6 +47,7 @@ public abstract class UpgradeableSessionTracker implements SessionTracker {
         this.upgradingSessions = new ConcurrentHashMap<Long, Integer>();
     }
 
+    @Override
     public boolean isTrackingSession(long sessionId) {
         return isLocalSession(sessionId) || isGlobalSession(sessionId);
     }
@@ -111,10 +112,12 @@ public abstract class UpgradeableSessionTracker implements SessionTracker {
         localSessionTracker.removeSession(sessionId);
     }
 
+    @Override
     public void checkGlobalSession(long sessionId, Object owner) throws KeeperException.SessionExpiredException, KeeperException.SessionMovedException {
         throw new UnsupportedOperationException();
     }
 
+    @Override
     public long getLocalSessionCount() {
         if (localSessionsWithTimeouts == null) {
             return 0;

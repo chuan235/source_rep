@@ -191,6 +191,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         /**
          * 接受连接请求
          */
+        @Override
         public void run() {
             try {
                 while (!stopped && !acceptSocket.socket().isClosed()) {
@@ -385,6 +386,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
          * newly accepted connections and updates any interest ops on the
          * queue.
          */
+        @Override
         public void run() {
             try {
                 while (!stopped) {
@@ -532,6 +534,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             this.cnxn = (NIOServerCnxn) key.attachment();
         }
 
+        @Override
         public void doWork() throws InterruptedException {
             if (!key.isValid()) {
                 selectorThread.cleanupSelectionKey(key);
@@ -539,6 +542,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             }
 
             if (key.isReadable() || key.isWritable()) {
+                // 处理读或写
                 cnxn.doIO(key);
 
                 // Check if we shutdown or doIO() closed this connection
@@ -743,16 +747,19 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     }
 
     /** {@inheritDoc} */
+    @Override
     public int getMaxClientCnxnsPerHost() {
         return maxClientCnxns;
     }
 
     /** {@inheritDoc} */
+    @Override
     public void setMaxClientCnxnsPerHost(int max) {
         maxClientCnxns = max;
     }
 
     /** {@inheritDoc} */
+    @Override
     public int getSocketListenBacklog() {
         return listenBacklog;
     }

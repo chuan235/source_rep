@@ -88,7 +88,7 @@ public enum EphemeralType {
             if ((ttl > TTL.maxValue()) || (ttl <= 0)) {
                 throw new IllegalArgumentException("ttl must be positive and cannot be larger than: " + TTL.maxValue());
             }
-            //noinspection PointlessBitwiseExpression
+            // noinspection PointlessBitwiseExpression
             return EXTENDED_MASK
                    | EXTENDED_BIT_TTL
                    | ttl;  // TTL_RESERVED_BIT is actually zero - but it serves to document that the proper extended bit needs to be set
@@ -128,7 +128,10 @@ public enum EphemeralType {
     }
 
     public static final long CONTAINER_EPHEMERAL_OWNER = Long.MIN_VALUE;
-    public static final long MAX_EXTENDED_SERVER_ID = 0xfe;  // 254
+    /**
+     * 最大的serverId 15*16+14 = 254
+     */
+    public static final long MAX_EXTENDED_SERVER_ID = 0xfe;
 
     private static final long EXTENDED_MASK = 0xff00000000000000L;
     private static final long EXTENDED_BIT_TTL = 0x0000;
