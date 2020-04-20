@@ -73,8 +73,7 @@ public abstract class ServerCnxnFactory {
     }
 
     /**
-     * @return true if the cnxn that contains the sessionId exists in this ServerCnxnFactory
-     *         and it's closed. Otherwise false.
+     * @return true if the cnxn that contains the sessionId exists in this ServerCnxnFactory and it's closed. Otherwise false.
      */
     public boolean closeSession(long sessionId, ServerCnxn.DisconnectReason reason) {
         ServerCnxn cnxn = sessionMap.remove(sessionId);

@@ -889,27 +889,28 @@ public class ClientCnxn {
                         eventThread.queueEventOfDeath();
                     }
                     return;
+                //触发事件 notification(WATCHER_EVENT)
                 case NOTIFICATION_XID:
-                    LOG.debug("Got notification session id: 0x{}",
-                            Long.toHexString(sessionId));
+                    LOG.debug("Got notification session id: 0x{}", Long.toHexString(sessionId));
+                    // 拿出服务器中发布过来的事件类型
                     WatcherEvent event = new WatcherEvent();
+                    // 会将服务端发送过来的触发事件的path和事件类型赋值给event
                     event.deserialize(bbia, "response");
-
                     // convert from a server path to a client path
                     if (chrootPath != null) {
                         String serverPath = event.getPath();
+                        // 检查path
                         if (serverPath.compareTo(chrootPath) == 0) {
                             event.setPath("/");
                         } else if (serverPath.length() > chrootPath.length()) {
                             event.setPath(serverPath.substring(chrootPath.length()));
                         } else {
-                            LOG.warn("Got server path {} which is too short for chroot path {}.",
-                                    event.getPath(), chrootPath);
+                            LOG.warn("Got server path {} which is too short for chroot path {}.", event.getPath(), chrootPath);
                         }
                     }
-
                     WatchedEvent we = new WatchedEvent(event);
                     LOG.debug("Got {} for session id 0x{}", we, Long.toHexString(sessionId));
+                    // 将读取出来的事件放入 EventThread 线程的 waitingEvents 这个阻塞队列中（LinkedBlockingQueue）
                     eventThread.queueEvent(we);
                     return;
                 default:
@@ -943,7 +944,7 @@ public class ClientCnxn {
                             + " expected Xid " + packet.requestHeader.getXid()
                             + " for a packet with details: " + packet);
                 }
-
+                // 从replyHdr读出对应的信息然后放入到 这个packet.replyHeader中
                 packet.replyHeader.setXid(replyHdr.getXid());
                 packet.replyHeader.setErr(replyHdr.getErr());
                 packet.replyHeader.setZxid(replyHdr.getZxid());
@@ -957,6 +958,12 @@ public class ClientCnxn {
                 LOG.debug("Reading reply session id: 0x{}, packet:: {}", Long.toHexString(sessionId), packet);
             } finally {
                 // 完成数据的组装
+                /**
+                 * 读取响应完成，唤醒outgoingqueue中的packet
+                 * 如果存在AsyncCallback，这时不会直接唤醒，只会将标识设置为已完成
+                 *      并将packet放入waitingEvents这个阻塞队列中，EventThread这个线程会一直监听这个队列
+                 *      一旦存在内容，就会取出来执行
+                 */
                 finishPacket(packet);
             }
         }

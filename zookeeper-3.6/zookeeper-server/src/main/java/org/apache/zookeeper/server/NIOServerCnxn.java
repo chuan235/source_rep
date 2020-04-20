@@ -140,13 +140,15 @@ public class NIOServerCnxn extends ServerCnxn {
         if (LOG.isTraceEnabled()) {
             LOG.trace("Add a buffer to outgoingBuffers, sk {} is valid: {}", sk, sk.isValid());
         }
-
+        // 将需要发送的buffer放入outgoingBuffers阻塞队列
         synchronized (outgoingBuffers) {
             for (ByteBuffer buffer : buffers) {
                 outgoingBuffers.add(buffer);
             }
+            // 结束符
             outgoingBuffers.add(packetSentinel);
         }
+        // 将selectionKey加入updateQueue，唤醒selector
         requestInterestOpsUpdate();
     }
 
@@ -185,6 +187,7 @@ public class NIOServerCnxn extends ServerCnxn {
             incomingBuffer.flip();
             packetReceived(4 + incomingBuffer.remaining());
             if (!initialized) {
+                // 处理connection 请求
                 readConnectRequest();
             } else {
                 // 处理Request ZooKeeperServer.processPacket
@@ -196,10 +199,12 @@ public class NIOServerCnxn extends ServerCnxn {
     }
 
     /**
-     * This boolean tracks whether the connection is ready for selection or
-     * not. A connection is marked as not ready for selection while it is
-     * processing an IO request. The flag is used to gatekeep pushing interest
-     * op updates onto the selector.
+     * This boolean tracks whether the connection is ready for selection or not.
+     * A connection is marked as not ready for selection while it is processing an IO request.
+     * The flag is used to gatekeep pushing interest op updates onto the selector.
+     * 这个boolean值表示当前的 SelectionKey 是否准备好进行选择
+     * 当在处理IO请求的时候，这个值会被设置为false，表示不会进行select
+     * 并将当前的socketChannel的ops设置为0，表示对任何的事件都不感兴趣
      */
     private final AtomicBoolean selectable = new AtomicBoolean(true);
 
@@ -227,18 +232,17 @@ public class NIOServerCnxn extends ServerCnxn {
         }
 
         /*
-         * This is going to reset the buffer position to 0 and the
-         * limit to the size of the buffer, so that we can fill it
-         * with data from the non-direct buffers that we need to
-         * send.
+         * This is going to reset the buffer position to 0 and the limit to the size of the buffer,
+         * so that we can fill it with data from the non-direct buffers that we need to send.
+         * 把缓冲区的位置重置为0，并限制缓冲区的大小，这样我们就可以用需要发送的非直接缓冲区的数据填充它。
          */
         ByteBuffer directBuffer = NIOServerCnxnFactory.getDirectBuffer();
         if (directBuffer == null) {
             ByteBuffer[] bufferList = new ByteBuffer[outgoingBuffers.size()];
-            // Use gathered write call. This updates the positions of the
-            // byte buffers to reflect the bytes that were written out.
+            // Use gathered write call. This updates the positions of the byte buffers to reflect the bytes that were written out.
+            // 更新字节缓冲区的位置，反映出已写的字节
             sock.write(outgoingBuffers.toArray(bufferList));
-
+            // 移除掉已发送的buffer
             // Remove the buffers that we have sent
             ByteBuffer bb;
             while ((bb = outgoingBuffers.peek()) != null) {
@@ -259,18 +263,17 @@ public class NIOServerCnxn extends ServerCnxn {
             for (ByteBuffer b : outgoingBuffers) {
                 if (directBuffer.remaining() < b.remaining()) {
                     /*
-                     * When we call put later, if the directBuffer is to
-                     * small to hold everything, nothing will be copied,
-                     * so we've got to slice the buffer if it's too big.
+                     * When we call put later, if the directBuffer is to small to hold everything, nothing will be copied,so we've got to slice the buffer if it's too big.
+                     * 在稍后调用put时，如果directBuffer太小，无法保存所有内容，则不会复制任何内容
+                     * 因此如果缓冲区太大，我们必须对其进行切片。
                      */
                     b = (ByteBuffer) b.slice().limit(directBuffer.remaining());
                 }
                 /*
-                 * put() is going to modify the positions of both
-                 * buffers, put we don't want to change the position of
-                 * the source buffers (we'll do that after the send, if
-                 * needed), so we save and reset the position after the
-                 * copy
+                 * put() is going to modify the positions of both buffers, put we don't want to change the position of
+                 * the source buffers (we'll do that after the send, if needed), so we save and reset the position after the copy
+                 * put()将修改两个缓冲区的位置，put我们不想更改源缓冲区的位置（如果需要，我们将在发送之后这样做），
+                 * 所以我们在复制之后保存并重置位置
                  */
                 int p = b.position();
                 directBuffer.put(b);
@@ -280,13 +283,12 @@ public class NIOServerCnxn extends ServerCnxn {
                 }
             }
             /*
-             * Do the flip: limit becomes position, position gets set to
-             * 0. This sets us up for the write.
+             * Do the flip: limit becomes position, position gets set to 0. This sets us up for the write.
+             * 将position设置为0
              */
             directBuffer.flip();
-
+            // 写入数据
             int sent = sock.write(directBuffer);
-
             ByteBuffer bb;
 
             // Remove the buffers that we have sent
@@ -698,6 +700,9 @@ public class NIOServerCnxn extends ServerCnxn {
      * (non-Javadoc)
      *
      * @see org.apache.zookeeper.server.ServerCnxnIface#process(org.apache.zookeeper.proto.WatcherEvent)
+     *
+     *
+     * 服务端在这里触发watcher
      */
     @Override
     public void process(WatchedEvent event) {

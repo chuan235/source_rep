@@ -310,9 +310,8 @@ public class ZKDatabase {
     }
 
     /**
-     * maintains a list of last <i>committedLog</i>
-     *  or so committed requests. This is used for
-     * fast follower synchronization.
+     * maintains a list of last <i>committedLog</i> or so committed requests. This is used for fast follower synchronization.
+     * 维护最近提交的请求列表。用于follower的快速同步
      * @param request committed request
      */
     public void addCommittedProposal(Request request) {

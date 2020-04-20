@@ -134,6 +134,9 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         failCreate = b;
     }
 
+    /**
+     * 生成事务id，节点验证
+     */
     @Override
     public void run() {
         try {
@@ -312,9 +315,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
     }
 
     /**
-     * This method will be called inside the ProcessRequestThread, which is a
-     * singleton, so there will be a single thread calling this code.
-     *
+     * This method will be called inside the ProcessRequestThread, which is a singleton, so there will be a single thread calling this code.
      * @param type
      * @param zxid
      * @param request

@@ -20,6 +20,7 @@ package org.apache.zookeeper.server;
 
 /**
  * Indicates that the number of client connections has exceeded some limit.
+ * 客户端连接数已超过某个限制
  */
 public class ClientCnxnLimitException extends Exception {
 

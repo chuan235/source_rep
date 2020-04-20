@@ -130,6 +130,8 @@ public abstract class ServerCnxn implements Stats, Watcher {
      * of request throttling. This flag may be false when a connection is
      * actually closed (false negative), but should never be true with
      * a connection is still alive (false positive).
+     * 标识连接正在关闭或者已关闭，作为请求限制的一部分，我们可以选择从中忽略未完成的请求。
+     * 当连接关闭时，此标志可能为false，但对于连接仍处于活动状态，该标志永远为false。
      */
     private volatile boolean stale = false;
 

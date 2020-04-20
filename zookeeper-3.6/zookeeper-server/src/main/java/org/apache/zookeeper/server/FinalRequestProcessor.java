@@ -105,6 +105,10 @@ public class FinalRequestProcessor implements RequestProcessor {
         this.requestPathMetricsCollector = zks.getRequestPathMetricsCollector();
     }
 
+    /**
+     * 修改内存数据，返回请求响应
+     * @param request
+     */
     @Override
     public void processRequest(Request request) {
         LOG.debug("Processing request:: {}", request);
@@ -205,7 +209,7 @@ public class FinalRequestProcessor implements RequestProcessor {
                 case OpCode.createSession: {
                     lastOp = "SESS";
                     updateStats(request, lastOp, lastZxid);
-
+                    // 初始化session
                     zks.finishSessionInit(request.cnxn, true);
                     return;
                 }

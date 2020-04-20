@@ -58,7 +58,7 @@ import org.slf4j.LoggerFactory;
  */
 
 /**
- * 作用：RequestThrottler会限制当前提交给请求处理器管道的未完成请求的数量
+ * 作用：RequestThrottler会限制提交给请求处理器的请求数
  * 使用：在NIOServerCnxn或者NettyServerCnxn中，通过 globalOutstandingLimit 来限制提交的请求
  * 一旦达到请求限制，连接层限制将通过禁用连接来对TCP连接实施反压
  * 但是，连接层始终允许连接在禁用对该连接的选择之前发送至少一个请求
@@ -151,7 +151,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                 if (killed) {
                     break;
                 }
-                // 拿出一个请求
+                // 拿出一个请求  如果没有会阻塞
                 Request request = submittedRequests.take();
                 if (Request.requestOfDeath == request) {
                     break;
@@ -174,6 +174,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                         if (zks.getInProcess() < maxRequests) {
                             break;
                         }
+                        // 请求多了
                         throttleSleep(stallTime);
                     }
                 }
@@ -194,6 +195,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
         } catch (InterruptedException e) {
             LOG.error("Unexpected interruption", e);
         }
+        // 清理request
         int dropped = drainQueue();
         LOG.info("RequestThrottler shutdown. Dropped {} requests", dropped);
     }
@@ -222,6 +224,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
         LOG.info("Draining request throttler queue");
         while ((request = submittedRequests.poll()) != null) {
             dropped += 1;
+            // 如果一个请求的NIOServerCnxn关闭了 那么与这个连接有关的所有request都会被标记为无效
             dropRequest(request);
         }
         return dropped;
@@ -237,8 +240,8 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
             // Note: this will close the connection
             conn.setInvalid();
         }
-        // Notify ZooKeeperServer that the request has finished so that it can
-        // update any request accounting/throttling limits.
+        // Notify ZooKeeperServer that the request has finished so that it can update any request accounting/throttling limits.
+        // 通知zookeperserver请求已完成，以便它可以更新任何请求记录和容量
         zks.requestFinished(request);
     }
 

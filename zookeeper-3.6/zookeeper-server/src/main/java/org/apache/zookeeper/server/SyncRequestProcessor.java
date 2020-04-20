@@ -67,6 +67,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
     private static long snapSizeInBytes = ZooKeeperServer.getSnapSizeInBytes();
 
     /**
+     * 用于改变快照时间的随机数
      * Random numbers used to vary snapshot timing
      */
     private int randRoll;
@@ -155,11 +156,14 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         randSize = Math.abs(ThreadLocalRandom.current().nextLong() % (snapSizeInBytes / 2));
     }
 
+    /**
+     * 记录事务id 生成快照
+     */
     @Override
     public void run() {
         try {
             // we do this in an attempt to ensure that not all of the servers in the ensemble take a snapshot at the same time
-            // 设置 randRoll 的值 0 ~ snapCount/2
+            // 设置 randRoll randSize 的值  确保集群中的所有服务器不会同时拍摄快照
             resetSnapshotStats();
             // 记录下最后一次刷新的时间
             lastFlushTime = Time.currentElapsedTime();
@@ -221,8 +225,10 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                     }
                     continue;
                 }
+                // toFlush需要刷新到磁盘的缓冲区数据
                 toFlush.add(si);
                 if (shouldFlush()) {
+                    // 当缓冲区超过了maxBatchSize则会刷新一次
                     flush();
                 }
                 ServerMetrics.getMetrics().SYNC_PROCESS_TIME.add(Time.currentElapsedTime() - startProcessTime);

@@ -46,8 +46,7 @@ import org.slf4j.LoggerFactory;
  *
  * Changed made compared to WatchManager:
  *
- * - Use HashSet and BitSet to store the watchers to find a balance between
- *   memory usage and time complexity
+ * - Use HashSet and BitSet to store the watchers to find a balance between memory usage and time complexity
  * - Use ReadWriteLock instead of synchronized to reduce lock retention
  * - Lazily clean up the closed watchers
  */
@@ -73,14 +72,15 @@ public class WatchManagerOptimized implements IWatchManager, IDeadWatcherListene
     @Override
     public boolean addWatch(String path, Watcher watcher) {
         boolean result = false;
-        // Need readLock to exclusively lock with removeWatcher, otherwise we
-        // may add a dead watch whose connection was just closed.
+        // Need readLock to exclusively lock with removeWatcher, otherwise we may add a dead watch whose connection was just closed.
+        // 需要readLock才能用removeWatcher独占锁定，否则我们可能会添加一个死连接，其连接刚刚关闭。
         //
-        // Creating new watcher bit and adding it to the BitHashSet has it's
-        // own lock to minimize the write lock scope
+        // Creating new watcher bit and adding it to the BitHashSet has it's own lock to minimize the write lock scope
+        // 创建一个新的watcher到bigmap中
         addRemovePathRWLock.readLock().lock();
         try {
             // avoid race condition of adding a on flying dead watcher
+            // 检查连接是否关闭
             if (isDeadWatcher(watcher)) {
                 LOG.debug("Ignoring addWatch with closed cnxn");
             } else {
@@ -89,9 +89,8 @@ public class WatchManagerOptimized implements IWatchManager, IDeadWatcherListene
                 if (watchers == null) {
                     watchers = new BitHashSet();
                     BitHashSet existingWatchers = pathWatches.putIfAbsent(path, watchers);
-                    // it's possible multiple thread might add to pathWatches
-                    // while we're holding read lock, so we need this check
-                    // here
+                    // it's possible multiple thread might add to pathWatches while we're holding read lock, so we need this check here
+                    // 这里可能有多个线程都在添加watcher，因此在这里在判断一下
                     if (existingWatchers != null) {
                         watchers = existingWatchers;
                     }
@@ -217,8 +216,7 @@ public class WatchManagerOptimized implements IWatchManager, IDeadWatcherListene
 
         int triggeredWatches = 0;
 
-        // Avoid race condition between dead watcher cleaner in
-        // WatcherCleaner and iterating here
+        // Avoid race condition between dead watcher cleaner in WatcherCleaner and iterating here
         synchronized (watchers) {
             for (Integer wBit : watchers) {
                 if (suppress != null && suppress.contains(wBit)) {
