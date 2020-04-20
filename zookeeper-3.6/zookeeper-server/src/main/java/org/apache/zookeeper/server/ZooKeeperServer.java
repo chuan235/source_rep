@@ -1734,31 +1734,31 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     // entry point for FinalRequestProcessor.java
     public ProcessTxnResult processTxn(Request request) {
         TxnHeader hdr = request.getHdr();
+        // 处理session的请求  createSession或者closeSession
         processTxnForSessionEvents(request, hdr, request.getTxn());
 
         final boolean writeRequest = (hdr != null);
+        // true -> 需要写数据  false -> 读取数据
         final boolean quorumRequest = request.isQuorum();
 
         // return fast w/o synchronization when we get a read
         if (!writeRequest && !quorumRequest) {
             return new ProcessTxnResult();
         }
+        // 阻塞List，取出list中的ChangeRecord去更新内存中的数据
         synchronized (outstandingChanges) {
+            // 处理器Request
             ProcessTxnResult rc = processTxnInDB(hdr, request.getTxn(), request.getTxnDigest());
 
-            // request.hdr is set for write requests, which are the only ones
-            // that add to outstandingChanges.
+            // request.hdr is set for write requests, which are the only ones that add to outstandingChanges.
             if (writeRequest) {
                 long zxid = hdr.getZxid();
-                while (!outstandingChanges.isEmpty()
-                        && outstandingChanges.peek().zxid <= zxid) {
+                while (!outstandingChanges.isEmpty() && outstandingChanges.peek().zxid <= zxid) {
                     ChangeRecord cr = outstandingChanges.remove();
                     ServerMetrics.getMetrics().OUTSTANDING_CHANGES_REMOVED.add(1);
                     if (cr.zxid < zxid) {
-                        LOG.warn(
-                            "Zxid outstanding 0x{} is less than current 0x{}",
-                            Long.toHexString(cr.zxid),
-                            Long.toHexString(zxid));
+                        LOG.warn("Zxid outstanding 0x{} is less than current 0x{}",
+                                Long.toHexString(cr.zxid),Long.toHexString(zxid));
                     }
                     if (outstandingChangesForPath.get(cr.path) == cr) {
                         outstandingChangesForPath.remove(cr.path);
@@ -1792,8 +1792,11 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     private ProcessTxnResult processTxnInDB(TxnHeader hdr, Record txn, TxnDigest digest) {
         if (hdr == null) {
+            // 请求头信息为null
             return new ProcessTxnResult();
         } else {
+            // 请求头信息不为空
+            // 开始更新内存中的数据，触发node操作中的watcher
             return getZKDatabase().processTxn(hdr, txn, digest);
         }
     }
