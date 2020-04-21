@@ -579,11 +579,13 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             case OpCode.createSession:
                 request.request.rewind();
                 int to = request.request.getInt();
+                // 生成创建session的事务记录
                 request.setTxn(new CreateSessionTxn(to));
                 request.request.rewind();
                 // only add the global session tracker but not to ZKDb
-                // 单节点下向sessionTracker中添加了session
+                // 更新session的超时时间
                 zks.sessionTracker.trackSession(request.sessionId, to);
+                // 设置owner
                 zks.setOwner(request.sessionId, request.getOwner());
                 break;
             case OpCode.closeSession:

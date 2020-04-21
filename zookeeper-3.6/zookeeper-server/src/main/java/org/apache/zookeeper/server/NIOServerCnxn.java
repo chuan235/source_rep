@@ -99,8 +99,8 @@ public class NIOServerCnxn extends ServerCnxn {
         this.sessionTimeout = factory.sessionlessCnxnTimeout;
     }
 
-    /* Send close connection packet to the client, doIO will eventually
-     * close the underlying machinery (like socket, selectorkey, etc...)
+    /* Send close connection packet to the client, doIO will eventually close the underlying machinery (like socket, selectorkey, etc...)
+     * doIO最终将关闭socket
      */
     @Override
     public void sendCloseSession() {
@@ -249,6 +249,7 @@ public class NIOServerCnxn extends ServerCnxn {
                 if (bb == ServerCnxnFactory.closeConn) {
                     throw new CloseRequestException("close requested", DisconnectReason.CLIENT_CLOSED_CONNECTION);
                 }
+                // 到了结束符
                 if (bb == packetSentinel) {
                     packetSent();
                 }

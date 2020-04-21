@@ -587,23 +587,24 @@ public class Leader extends LearnerMaster {
         try {
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
             self.tick.set(0);
+            // 更新Leader的zxid和当前机器节点的session信息
             zk.loadData();
-
+            // 将当前节点的epoch和最新的zxid构建为一个 StateSummary 对象
             leaderStateSummary = new StateSummary(self.getCurrentEpoch(), zk.getLastProcessedZxid());
 
-            // Start thread that waits for connection requests from
-            // new followers.
+            // Start thread that waits for connection requests from new followers.
+            // 启动一个LearnerCnxAcceptor线程，来连接follower
             cnxAcceptor = new LearnerCnxAcceptor();
+            // LearnerCnxAcceptor#run()
             cnxAcceptor.start();
-
+            // 产生新的 epoch，进入这里会阻塞在这里，等到过半的follower将sid和epoch发送过来
             long epoch = getEpochToPropose(self.getId(), self.getAcceptedEpoch());
-
+            // 开始新的zxid
             zk.setZxid(ZxidUtils.makeZxid(epoch, 0));
-
             synchronized (this) {
                 lastProposed = zk.getZxid();
             }
-
+            // 构建一个 NEWLEADER 的packet 通知所有的follower 和 observer
             newLeaderProposal.packet = new QuorumPacket(NEWLEADER, zk.getZxid(), null, null);
 
             if ((newLeaderProposal.packet.getZxid() & 0xffffffffL) != 0) {
@@ -646,10 +647,9 @@ public class Leader extends LearnerMaster {
                 newLeaderProposal.addQuorumVerifier(self.getLastSeenQuorumVerifier());
             }
 
-            // We have to get at least a majority of servers in sync with
-            // us. We do this by waiting for the NEWLEADER packet to get
-            // acknowledged
-
+            // We have to get at least a majority of servers in sync with us.
+            // We do this by waiting for the NEWLEADER packet to get acknowledged
+            // 等待上面的 NEWLEADER packet的ack 响应
             waitForEpochAck(self.getId(), leaderStateSummary);
             self.setCurrentEpoch(epoch);
             self.setLeaderAddressAndId(self.getQuorumAddress(), self.getId());
@@ -1392,7 +1392,9 @@ public class Leader extends LearnerMaster {
             quitLeading();
         }
     }
-
+    /**
+     * 统一 Epoch
+     */
     @Override
     public long getEpochToPropose(long sid, long lastAcceptedEpoch) throws InterruptedException, IOException {
         synchronized (connectingFollowers) {
@@ -1400,12 +1402,16 @@ public class Leader extends LearnerMaster {
                 return epoch;
             }
             if (lastAcceptedEpoch >= epoch) {
+                // 更新当前的epoch
                 epoch = lastAcceptedEpoch + 1;
             }
             if (isParticipant(sid)) {
+                // 如果是follower，则统计follower的信息
                 connectingFollowers.add(sid);
             }
             QuorumVerifier verifier = self.getQuorumVerifier();
+            // verifier.containsQuorum(connectingFollowers) 检测连接过来的follower是否已经超过一半，过半机制的验证
+            // QuorumMaj.containsQuorum 过半机制算法
             if (connectingFollowers.contains(self.getId()) && verifier.containsQuorum(connectingFollowers)) {
                 waitingForNewEpoch = false;
                 self.setAcceptedEpoch(epoch);
@@ -1418,6 +1424,7 @@ public class Leader extends LearnerMaster {
                 long cur = start;
                 long end = start + self.getInitLimit() * self.getTickTime();
                 while (waitingForNewEpoch && cur < end && !quitWaitForEpoch) {
+                    // 等待一半以上的follower 将epoch数据发上来
                     connectingFollowers.wait(end - cur);
                     cur = Time.currentElapsedTime();
                 }
@@ -1439,6 +1446,9 @@ public class Leader extends LearnerMaster {
     // VisibleForTesting
     protected boolean electionFinished = false;
 
+    /**
+     * 等待所有的follower将zxId和epoch发送过来 ss中的epoch有可能为-1
+     */
     @Override
     public void waitForEpochAck(long id, StateSummary ss) throws IOException, InterruptedException {
         synchronized (electingFollowers) {
@@ -1446,6 +1456,7 @@ public class Leader extends LearnerMaster {
                 return;
             }
             if (ss.getCurrentEpoch() != -1) {
+                // 如果follower上的epoch和leader上的epoch相等（这时的epoch本来是最大的epoch+1）
                 if (ss.isMoreRecentThan(leaderStateSummary)) {
                     throw new IOException("Follower is ahead of the leader, leader summary: "
                                           + leaderStateSummary.getCurrentEpoch()

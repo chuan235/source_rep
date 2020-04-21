@@ -225,9 +225,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 Iterator<SelectionKey> selectedKeys = selector.selectedKeys().iterator();
                 while (!stopped && selectedKeys.hasNext()) {
                     SelectionKey key = selectedKeys.next();
-                    selectedKeys.remove();
-                    if (!key.isValid()) {
-                        continue;
+                        selectedKeys.remove();
+                        if (!key.isValid()) {
+                            continue;
                     }
                     if (key.isAcceptable()) {
                         // 处理accept事件

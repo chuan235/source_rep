@@ -209,7 +209,7 @@ public class FinalRequestProcessor implements RequestProcessor {
                 case OpCode.createSession: {
                     lastOp = "SESS";
                     updateStats(request, lastOp, lastZxid);
-                    // 初始化session
+                    // 初始化session  并且发送 ConnectResponse
                     zks.finishSessionInit(request.cnxn, true);
                     return;
                 }
@@ -583,6 +583,7 @@ public class FinalRequestProcessor implements RequestProcessor {
             err = Code.MARSHALLINGERROR;
         }
 
+        // err.intValue() = 0
         ReplyHeader hdr = new ReplyHeader(request.cxid, lastZxid, err.intValue());
 
         updateStats(request, lastOp, lastZxid);
@@ -600,6 +601,7 @@ public class FinalRequestProcessor implements RequestProcessor {
                     case OpCode.getData: {
                         GetDataResponse getDataResponse = (GetDataResponse) rsp;
                         stat = getDataResponse.getStat();
+                        // 默认的 hdr.err = 0
                         cnxn.sendResponse(hdr, rsp, "response", path, stat, opCode);
                         break;
                     }
@@ -644,6 +646,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         }
         zks.checkACL(cnxn, zks.getZKDatabase().aclForNode(n), ZooDefs.Perms.READ, authInfo, path, null);
         Stat stat = new Stat();
+        // getData 注册watcher 注册ServerCnxn
         byte[] b = zks.getZKDatabase().getData(path, stat, getDataRequest.getWatch() ? cnxn : null);
         return new GetDataResponse(b, stat);
     }

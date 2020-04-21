@@ -721,6 +721,7 @@ public class DataTree {
         synchronized (n) {
             n.copyStat(stat);
             if (watcher != null) {
+                // 注册ServerCnxn
                 dataWatches.addWatch(path, watcher);
             }
             data = n.data;

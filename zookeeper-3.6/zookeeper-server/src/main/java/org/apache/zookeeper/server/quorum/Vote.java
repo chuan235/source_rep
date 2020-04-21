@@ -20,6 +20,9 @@ package org.apache.zookeeper.server.quorum;
 
 import org.apache.zookeeper.server.quorum.QuorumPeer.ServerState;
 
+/**
+ * zookeeper中的选票类  一个vote对象就代表一张选票
+ */
 public class Vote {
 
     public Vote(long id, long zxid) {
@@ -33,10 +36,15 @@ public class Vote {
 
     public Vote(long id, long zxid, long peerEpoch) {
         this.version = 0x0;
+        // id => serverId
         this.id = id;
+        // serverId对应服务器上最大的Zxid
         this.zxid = zxid;
+        // 选举后的epoch 选出来的最大的epoch+1
         this.electionEpoch = -1;
+        // serverId服务器对应的epoch
         this.peerEpoch = peerEpoch;
+        // 状态
         this.state = ServerState.LOOKING;
     }
 

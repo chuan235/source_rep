@@ -147,11 +147,10 @@ public class WatcherCleaner extends Thread {
             }
 
             synchronized (this) {
-                // Clean the dead watchers need to go through all the current
-                // watches, which is pretty heavy and may take a second if
-                // there are millions of watches, that's why we're doing lazily
-                // batch clean up in a separate thread with a snapshot of the
-                // current dead watchers.
+                // Clean the dead watchers need to go through all the current watches, which is pretty heavy and may take a second if there are millions of watches,
+                // that's why we're doing lazily batch clean up in a separate thread with a snapshot of the current dead watchers.
+                // 清理过时的watcher需要检查所有当前的watcher，这种非常复杂，如果有100w个watcher，这里的耗时会非常严重
+                // 所以最好是在这里单独开辟一个线程惰性的进行处理，并带有当前过期的watcher的快照
                 final Set<Integer> snapshot = new HashSet<Integer>(deadWatchers);
                 deadWatchers.clear();
                 int total = snapshot.size();

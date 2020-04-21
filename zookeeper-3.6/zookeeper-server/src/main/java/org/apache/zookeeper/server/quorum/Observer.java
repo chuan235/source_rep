@@ -103,10 +103,13 @@ public class Observer extends Learner {
         boolean completedSync = false;
         try {
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
+            // 找到Leader
             QuorumServer master = findLearnerMaster();
             try {
+                // 连接到Leader
                 connectToLeader(master.addr, master.hostname);
                 connectTime = System.currentTimeMillis();
+                // 和follower一致
                 long newLeaderZxid = registerWithLeader(Leader.OBSERVERINFO);
                 if (self.isReconfigStateChange()) {
                     throw new Exception("learned about role change");

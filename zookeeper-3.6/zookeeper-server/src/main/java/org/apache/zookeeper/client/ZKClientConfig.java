@@ -44,10 +44,11 @@ public class ZKClientConfig extends ZKConfig {
     public static final String ENABLE_CLIENT_SASL_DEFAULT = ZooKeeperSaslClient.ENABLE_CLIENT_SASL_DEFAULT;
     public static final String ZOOKEEPER_SERVER_REALM = "zookeeper.server.realm";
     /**
-     * This controls whether automatic watch resetting is enabled. Clients
-     * automatically reset watches during session reconnect, this option allows
+     * This controls whether automatic watch resetting is enabled.
+     * Clients automatically reset watches during session reconnect, this option allows
      * the client to turn off this behavior by setting the property
      * "zookeeper.disableAutoWatchReset" to "true"
+     * 会话重新连接时会重置watcher
      */
     public static final String DISABLE_AUTO_WATCH_RESET = "zookeeper.disableAutoWatchReset";
     @SuppressWarnings("deprecation")

@@ -155,13 +155,21 @@ public class QuorumCnxManager {
 
     /*
      * Mapping from Peer to Thread number
+     * 发送器集合，每一个SendWorker消息发送器都对应了一个服务器，负责消息的发送 serverId:SendWorker
      */
     final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
+    /**
+     * 需要给服务器发送的消息队列，保存待发送的消息，根据服务器id分组
+     */
     final ConcurrentHashMap<Long, BlockingQueue<ByteBuffer>> queueSendMap;
+    /**
+     * 最近发送过的消息，为每一个serverId保留最近发送过的一个消息
+     */
     final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
 
     /*
      * Reception queue
+     * 消息接收队列，存放从其他服务器接收到的消息
      */
     public final BlockingQueue<Message> recvQueue;
 
@@ -549,8 +557,8 @@ public class QuorumCnxManager {
         DataInputStream din = null;
         try {
             din = new DataInputStream(new BufferedInputStream(sock.getInputStream()));
-
             LOG.debug("Sync handling of connection request received from: {}", sock.getRemoteSocketAddress());
+            // 处理连接
             handleConnection(sock, din);
         } catch (IOException e) {
             LOG.error("Exception handling connection, addr: {}, closing server connection", sock.getRemoteSocketAddress());
@@ -593,13 +601,22 @@ public class QuorumCnxManager {
 
     }
 
+    /**
+     * 处理socket连接
+     * 这里接收的客户端对应的serverId必须要比当前的serverId大
+     * 相反的话，当前的server会主动去连那个serverId小的server
+     * @param sock
+     * @param din
+     * @throws IOException
+     */
     private void handleConnection(Socket sock, DataInputStream din) throws IOException {
         Long sid = null, protocolVersion = null;
         MultipleAddresses electionAddr = null;
-
         try {
+            // 读出serverId
             protocolVersion = din.readLong();
-            if (protocolVersion >= 0) { // this is a server id and not a protocol version
+            // this is a server id and not a protocol version
+            if (protocolVersion >= 0) {
                 sid = protocolVersion;
             } else {
                 try {
@@ -616,12 +633,10 @@ public class QuorumCnxManager {
                     return;
                 }
             }
-
+            // 如果接收到的是Observer的连接
             if (sid == QuorumPeer.OBSERVER_ID) {
-                /*
-                 * Choose identifier at random. We need a value to identify
-                 * the connection.
-                 */
+                // Choose identifier at random. We need a value to identify the connection.
+                // 随机生成一个值来标记这次observer连接
                 sid = observerCounter.getAndDecrement();
                 LOG.info("Setting arbitrary identifier to observer: {}", sid);
             }
@@ -634,23 +649,20 @@ public class QuorumCnxManager {
         // do authenticating learner
         authServer.authenticate(sock, din);
         //If wins the challenge, then close the new connection.
+        // 如果客户端的sid小于当前服务器的sid，则需要开启新连接
+        // 只能是大sid的server来连接小sid的server
         if (sid < self.getId()) {
-            /*
-             * This replica might still believe that the connection to sid is
-             * up, so we have to shut down the workers before trying to open a
-             * new connection.
-             */
+            // This replica might still believe that the connection to sid is up,
+            // so we have to shut down the workers before trying to open a new connection.
             SendWorker sw = senderWorkerMap.get(sid);
             if (sw != null) {
                 sw.finish();
             }
-
-            /*
-             * Now we start a new connection
-             */
+            // Now we start a new connection
             LOG.debug("Create new connection to server: {}", sid);
+            // 关闭原有的socket，开启新的socket连接
             closeSocket(sock);
-
+            // 当前的server作为客户端去连接sid小的sever
             if (electionAddr != null) {
                 connectOne(sid, electionAddr);
             } else {
@@ -661,7 +673,10 @@ public class QuorumCnxManager {
             // we saw this case in ZOOKEEPER-2164
             LOG.warn("We got a connection request from a server with our own ID. "
                      + "This should be either a configuration error, or a bug.");
-        } else { // Otherwise start worker threads to receive data.
+        } else {
+            // Otherwise start worker threads to receive data.
+            // 如果客户端的serverId大于了当前的serverId，则不能主动去连接它
+            // 开启接收和发送数据的线程 ，接收和发送数据
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
@@ -671,9 +686,9 @@ public class QuorumCnxManager {
             if (vsw != null) {
                 vsw.finish();
             }
-
+            // 添加服务器对应的 SendWorker
             senderWorkerMap.put(sid, sw);
-
+            // 给服务器初始化一个需要发送的消息数据队列
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
 
             sw.start();
@@ -710,11 +725,12 @@ public class QuorumCnxManager {
      * The function will return quickly and the connection will be established asynchronously.
      *
      * VisibleForTesting.
-     *
+     * 根据serverid和ip去建立连接
      *  @param sid  server id
      *  @return boolean success indication
      */
     synchronized boolean connectOne(long sid, MultipleAddresses electionAddr) {
+        // 如果没有建立连接，才会去连接
         if (senderWorkerMap.get(sid) != null) {
             LOG.debug("There is a connection already for server {}", sid);
             if (self.isMultiAddressEnabled() && electionAddr.size() > 1 && self.isMultiAddressReachabilityCheckEnabled()) {
@@ -735,8 +751,9 @@ public class QuorumCnxManager {
     /**
      * Try to establish a connection to server with id sid.
      * The function will return quickly and the connection will be established asynchronously.
-     *
+     * 根据serverid建立连接
      *  @param sid  server id
+     *
      */
     synchronized void connectOne(long sid) {
         if (senderWorkerMap.get(sid) != null) {
@@ -802,6 +819,7 @@ public class QuorumCnxManager {
             final int queueSize = queue.size();
             LOG.debug("Queue size: {}", queueSize);
             if (queueSize == 0) {
+                // 如果存在队列数据为空，表示信息已经发送完成
                 return true;
             }
         }
@@ -944,7 +962,7 @@ public class QuorumCnxManager {
             if (!shutdown) {
                 LOG.debug("Listener thread started, myId: {}", self.getId());
                 Set<InetSocketAddress> addresses;
-
+                // 获取选举的端口地址
                 if (self.getQuorumListenOnAllIPs()) {
                     addresses = self.getElectionAddress().getWildcardAddresses();
                 } else {
@@ -952,14 +970,16 @@ public class QuorumCnxManager {
                 }
 
                 CountDownLatch latch = new CountDownLatch(addresses.size());
+                // 每一个选举地址 都会有一个ListenerHandler对应
                 listenerHandlers = addresses.stream().map(address ->
                                 new ListenerHandler(address, self.shouldUsePortUnification(), self.isSslQuorum(), latch))
                         .collect(Collectors.toList());
-
+                // 提交listenerHandlers
                 ExecutorService executor = Executors.newFixedThreadPool(addresses.size());
                 listenerHandlers.forEach(executor::submit);
-
+                // CountDownLatch#await
                 try {
+                    // 阻塞在这里
                     latch.await();
                 } catch (InterruptedException ie) {
                     LOG.error("Interrupted while sleeping. Ignoring exception", ie);
@@ -1030,8 +1050,10 @@ public class QuorumCnxManager {
             public void run() {
                 try {
                     Thread.currentThread().setName("ListenerHandler-" + address);
+                    // 连接到集群中的机器
                     acceptConnections();
                     try {
+                        // 关闭serverSocket 连接
                         close();
                     } catch (IOException e) {
                         LOG.warn("Exception when shutting down listener: ", e);
@@ -1040,6 +1062,7 @@ public class QuorumCnxManager {
                     // Output of unexpected exception, should never happen
                     LOG.error("Unexpected error ", e);
                 } finally {
+                    // 将countDownLatch的值减1
                     latch.countDown();
                 }
             }
@@ -1058,24 +1081,27 @@ public class QuorumCnxManager {
             private void acceptConnections() {
                 int numRetries = 0;
                 Socket client = null;
-
+                // 默认是循环3次绑定选举端口
                 while ((!shutdown) && (portBindMaxRetry == 0 || numRetries < portBindMaxRetry)) {
                     try {
+                        // ServerSocket.bind(addr)  创建一个ServerSocket并绑定在选举端口
                         serverSocket = createNewServerSocket();
                         LOG.info("{} is accepting connections now, my election bind port: {}", QuorumCnxManager.this.mySid, address.toString());
                         while (!shutdown) {
                             try {
+                                // BIO 阻塞  接收客户端的连接
                                 client = serverSocket.accept();
                                 setSockOpts(client);
                                 LOG.info("Received connection request from {}", client.getRemoteSocketAddress());
-                                // Receive and handle the connection request
-                                // asynchronously if the quorum sasl authentication is
-                                // enabled. This is required because sasl server
-                                // authentication process may take few seconds to finish,
+                                // Receive and handle the connection request  asynchronously if the quorum sasl authentication is enabled.
+                                // This is required because sasl server authentication process may take few seconds to finish,
                                 // this may delay next peer connection requests.
                                 if (quorumSaslAuthEnabled) {
+                                    // 如果启用了SASL身份认证，则在这里异步处理连接
+                                    // 因为sasl服务器身份验证过程可能需要几秒钟才能完成，这可能会延迟下一个对等连接请求
                                     receiveConnectionAsync(client);
                                 } else {
+                                    // 同步处理client
                                     receiveConnection(client);
                                 }
                                 numRetries = 0;
@@ -1248,6 +1274,7 @@ public class QuorumCnxManager {
                  */
                 BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid);
                 if (bq == null || isSendQueueEmpty(bq)) {
+                    // send Last Message to sid = sid
                     ByteBuffer b = lastMessageSent.get(sid);
                     if (b != null) {
                         LOG.debug("Attempting to send lastMessage to sid={}", sid);
@@ -1376,19 +1403,16 @@ public class QuorumCnxManager {
             try {
                 LOG.debug("RecvWorker thread towards {} started. myId: {}", sid, QuorumCnxManager.this.mySid);
                 while (running && !shutdown && sock != null) {
-                    /**
-                     * Reads the first int to determine the length of the
-                     * message
-                     */
+                    // Reads the first int to determine the length of the message
+                    // 读取一个int是数据长度
                     int length = din.readInt();
                     if (length <= 0 || length > PACKETMAXSIZE) {
                         throw new IOException("Received packet with invalid packet: " + length);
                     }
-                    /**
-                     * Allocates a new ByteBuffer to receive the message
-                     */
+                    // Allocates a new ByteBuffer to receive the message
                     final byte[] msgArray = new byte[length];
                     din.readFully(msgArray, 0, length);
+                    // 将读出来的数据包装为Message 并 offer到recvQueue队列
                     addToRecvQueue(new Message(ByteBuffer.wrap(msgArray), sid));
                 }
             } catch (Exception e) {

@@ -430,24 +430,21 @@ public class Learner {
      * @throws IOException
      */
     protected long registerWithLeader(int pktType) throws IOException {
-        /*
-         * Send follower info, including last zxid and sid
-         */
+        // Send follower info, including last zxid and sid
         long lastLoggedZxid = self.getLastLoggedZxid();
         QuorumPacket qp = new QuorumPacket();
         qp.setType(pktType);
         qp.setZxid(ZxidUtils.makeZxid(self.getAcceptedEpoch(), 0));
 
-        /*
-         * Add sid to payload
-         */
+        // Add sid to payload
         LearnerInfo li = new LearnerInfo(self.getId(), 0x10000, self.getQuorumVerifier().getVersion());
         ByteArrayOutputStream bsid = new ByteArrayOutputStream();
         BinaryOutputArchive boa = BinaryOutputArchive.getArchive(bsid);
         boa.writeRecord(li, "LearnerInfo");
         qp.setData(bsid.toByteArray());
-
+        // 将follower中最新Epoch 和 Zxid发送给leader
         writePacket(qp, true);
+        // 接收Leader发送过来的 LEADERINFO packet 统一Zxid和Epoch
         readPacket(qp);
         final long newEpoch = ZxidUtils.getEpochFromZxid(qp.getZxid());
         if (qp.getType() == Leader.LEADERINFO) {
@@ -456,6 +453,7 @@ public class Learner {
             byte[] epochBytes = new byte[4];
             final ByteBuffer wrappedEpochBytes = ByteBuffer.wrap(epochBytes);
             if (newEpoch > self.getAcceptedEpoch()) {
+                // 如果当前机器的 Epoch 小于 newEpoch 修改当前的Epoch，并且把旧的Epoch放入缓冲流中
                 wrappedEpochBytes.putInt((int) self.getCurrentEpoch());
                 self.setAcceptedEpoch(newEpoch);
             } else if (newEpoch == self.getAcceptedEpoch()) {
@@ -465,12 +463,16 @@ public class Learner {
                 // the -1 indicates that this reply should not count as an ack for the new epoch
                 wrappedEpochBytes.putInt(-1);
             } else {
+                // 大于最新的会抛出异常
                 throw new IOException("Leaders epoch, "
                                       + newEpoch
                                       + " is less than accepted epoch, "
                                       + self.getAcceptedEpoch());
             }
+            // lastLoggedZxid：当前机器的最后一次事务id 包含了epoch
             QuorumPacket ackNewEpoch = new QuorumPacket(Leader.ACKEPOCH, lastLoggedZxid, epochBytes, null);
+            // 向Leader发送一个ACK 的packet
+            // 表示自己已经重置的 Epoch，并且将自己机器上的同步之前的 Epoch 发送出去了
             writePacket(ackNewEpoch, true);
             return ZxidUtils.makeZxid(newEpoch, 0);
         } else {

@@ -1025,8 +1025,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         }
 
         try {
-            ConnectResponse rsp = new ConnectResponse(
-                0,
+            ConnectResponse rsp = new ConnectResponse(0,
                 valid ? cnxn.getSessionTimeout() : 0,
                 valid ? cnxn.getSessionId() : 0, // send 0 if session is no
                 // longer valid
@@ -1425,6 +1424,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // 在回话建立之前  拒绝所有的数据包   不希望接收到任何数据包
         cnxn.disableRecv();
         if (sessionId == 0) {
+            // 使用sessionTracker新建session
             long id = createSession(cnxn, passwd, sessionTimeout);
             LOG.debug(
                 "Client attempting to establish new session: session = 0x{}, zxid = 0x{}, timeout = {}, address = {}",
@@ -1593,8 +1593,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // in cnxn, since it will close the cnxn anyway.
         cnxn.incrOutstandingAndCheckThrottle(h);
 
-        // Through the magic of byte buffers, txn will not be
-        // pointing
+        // Through the magic of byte buffers, txn will not be pointing
         // to the start of the txn
         incomingBuffer = incomingBuffer.slice();
         if (h.getType() == OpCode.auth) {

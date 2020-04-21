@@ -82,9 +82,12 @@ public class Follower extends Learner {
 
         try {
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
+            // 找到leader
             QuorumServer leaderServer = findLeader();
             try {
+                // 连接到Leader
                 connectToLeader(leaderServer.addr, leaderServer.hostname);
+                // 向leader发送一个 FOLLOWERINFO packet ....  返回的是leader生成的最新的epoch
                 connectionTime = System.currentTimeMillis();
                 long newEpochZxid = registerWithLeader(Leader.FOLLOWERINFO);
                 if (self.isReconfigStateChange()) {

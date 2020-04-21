@@ -503,13 +503,16 @@ public class ClientCnxn {
             final Set<Watcher> watchers;
             if (materializedWatchers == null) {
                 // materialize the watchers based on the event
+                // 返回具体的watcher集合
                 watchers = watcher.materialize(event.getState(), event.getType(), event.getPath());
             } else {
                 watchers = new HashSet<Watcher>();
                 watchers.addAll(materializedWatchers);
             }
+            // 根据事件的类型组建具体的watchers
             WatcherSetEventPair pair = new WatcherSetEventPair(watchers, event);
             // queue the pair (watch set & event) for later processing
+            // 将WatcherSetEventPair对象放入阻塞队列
             waitingEvents.add(pair);
         }
 
@@ -543,6 +546,7 @@ public class ClientCnxn {
                 isRunning = true;
                 while (true) {
                     Object event = waitingEvents.take();
+                    // 如果取出来是 eventOfDeath 会进入第二个if
                     if (event == eventOfDeath) {
                         wasKilled = true;
                     } else {
@@ -550,6 +554,7 @@ public class ClientCnxn {
                         processEvent(event);
                     }
                     if (wasKilled) {
+                        // 如果队列空了最后一个是eventOfDeath，要终止循环
                         synchronized (waitingEvents) {
                             if (waitingEvents.isEmpty()) {
                                 isRunning = false;
@@ -736,6 +741,8 @@ public class ClientCnxn {
     protected void finishPacket(Packet p) {
         int err = p.replyHeader.getErr();
         if (p.watchRegistration != null) {
+            // 接收到的packet存在watcher注册器的时候
+            // 会根据注册器的类型将Watcher注册到不同的Map中
             p.watchRegistration.register(err);
         }
         // Add all the removed watch events to the event queue, so that the
@@ -760,7 +767,7 @@ public class ClientCnxn {
                 p.replyHeader.setErr(ke.code().intValue());
             }
         }
-
+        // cb就是AsnycCallback，如果为null，表明是同步调用的接口，不需要异步回调，直接notifyAll即可
         if (p.cb == null) {
             // 同步需要唤醒 等待服务端处理packet的请求线程
             synchronized (p) {
@@ -769,6 +776,8 @@ public class ClientCnxn {
             }
         } else {
             // 异步将packet加入到waitingEvents队列中
+            // 如果存在 AsyncCallback，那么packet是不是会一直阻塞在submitRequest中 ? ClientCnxn#submitRequest 方法什么时候唤醒
+            // 存在 AsyncCallback，也将这个packet标识为已完成
             p.finished = true;
             eventThread.queuePacket(p);
         }
@@ -1004,10 +1013,10 @@ public class ClientCnxn {
             isFirstConnect = false;
             long sessId = (seenRwServerBefore) ? sessionId : 0;
             ConnectRequest conReq = new ConnectRequest(0, lastZxid, sessionTimeout, sessId, sessionPasswd);
-            // We add backwards since we are pushing into the front
-            // Only send if there's a pending watch
+            // We add backwards since we are pushing into the front Only send if there's a pending watch
             // TODO: here we have the only remaining use of zooKeeper in
             // this class. It's to be eliminated!
+            // 建立连接时 在session恢复时是否重置绑定的watcher
             if (!clientConfig.getBoolean(ZKClientConfig.DISABLE_AUTO_WATCH_RESET)) {
                 List<String> dataWatches = zooKeeper.getDataWatches();
                 List<String> existWatches = zooKeeper.getExistWatches();
@@ -1075,17 +1084,14 @@ public class ClientCnxn {
                     }
                 }
             }
-
+            // 权限验证
             for (AuthData id : authInfo) {
-                outgoingQueue.addFirst(
-                        new Packet(
-                                new RequestHeader(ClientCnxn.AUTHPACKET_XID, OpCode.auth),
-                                null,
-                                new AuthPacket(0, id.scheme, id.data),
-                                null,
-                                null));
+                Packet p = new Packet(new RequestHeader(ClientCnxn.AUTHPACKET_XID, OpCode.auth),null,new AuthPacket(0, id.scheme, id.data),null,null);
+                outgoingQueue.addFirst(p);
             }
             outgoingQueue.addFirst(new Packet(null, null, conReq, null, null, readOnly));
+            // ClientCnxnSocketNIO#connectionPrimed
+            // 注册SelectionKey感兴趣的事件为  OP_READ | OP_WRITE
             clientCnxnSocket.connectionPrimed();
             LOG.debug("Session establishment request sent on {}", clientCnxnSocket.getRemoteSocketAddress());
         }
@@ -1130,13 +1136,15 @@ public class ClientCnxn {
             saslLoginFailed = false;
             if (!isFirstConnect) {
                 try {
+                    // 不是第一次连接  线程等待
                     Thread.sleep(r.nextInt(1000));
                 } catch (InterruptedException e) {
                     LOG.warn("Unexpected exception", e);
                 }
             }
+            // 修改状态为连接中
             state = States.CONNECTING;
-
+            // host  and  port
             String hostPort = addr.getHostString() + ":" + addr.getPort();
             MDC.put("myid", hostPort);
             setName(getName().replaceAll("\\(.*\\)", "(" + hostPort + ")"));
@@ -1160,7 +1168,7 @@ public class ClientCnxn {
                 }
             }
             logStartConnect(addr);
-
+            // 建立连接
             clientCnxnSocket.connect(addr);
         }
 
@@ -1182,7 +1190,7 @@ public class ClientCnxn {
             InetSocketAddress serverAddress = null;
             while (state.isAlive()) {
                 try {
-                    // 是否已连接到服务端
+                    // 是否已连接到服务端  第一次会进来连接服务器
                     if (!clientCnxnSocket.isConnected()) {
                         // don't re-establish connection if we are closing
                         if (closing) {
@@ -1397,8 +1405,7 @@ public class ClientCnxn {
         }
 
         /**
-         * Callback invoked by the ClientCnxnSocket once a connection has been
-         * established.
+         * Callback invoked by the ClientCnxnSocket once a connection has been established.
          *
          * @param _negotiatedSessionTimeout
          * @param _sessionId
@@ -1490,7 +1497,7 @@ public class ClientCnxn {
      */
     public void disconnect() {
         LOG.debug("Disconnecting client for session: 0x{}", Long.toHexString(getSessionId()));
-
+        // 关闭发送数据的线程
         sendThread.close();
         try {
             sendThread.join();
@@ -1520,6 +1527,7 @@ public class ClientCnxn {
         } catch (InterruptedException e) {
             // ignore, close the send/event threads
         } finally {
+            // 关闭线程  断开socket
             disconnect();
         }
     }

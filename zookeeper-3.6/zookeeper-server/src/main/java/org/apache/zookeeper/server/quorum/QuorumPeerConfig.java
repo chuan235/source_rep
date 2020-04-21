@@ -174,23 +174,24 @@ public class QuorumPeerConfig {
         LOG.info("Reading configuration from: " + path);
 
         try {
+            // 使用文件来读取配置信息
             File configFile = (new VerifyingFileFactory.Builder(LOG)
                 .warnForRelativePath()
                 .failForNonExistingPath()
                 .build()).create(path);
-
+            // 通过流将文件load到内存中
             Properties cfg = new Properties();
             FileInputStream in = new FileInputStream(configFile);
             try {
+                // 将文件中的信息封装到一个Properties对象中
                 cfg.load(in);
                 configFileStr = path;
             } finally {
                 in.close();
             }
-
             /* Read entire config file as initial configuration */
             initialConfig = new String(Files.readAllBytes(configFile.toPath()));
-
+            // 将properties中的信息和配置类关联起来
             parseProperties(cfg);
         } catch (IOException e) {
             throw new ConfigException("Error processing " + path, e);

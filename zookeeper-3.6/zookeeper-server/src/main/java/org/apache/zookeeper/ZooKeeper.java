@@ -522,10 +522,7 @@ public class ZooKeeper implements AutoCloseable {
          *                                                        Event.EventType, java.lang.String)
          */
         @Override
-        public Set<Watcher> materialize(
-                Watcher.Event.KeeperState state,
-                Watcher.Event.EventType type,
-                String clientPath) {
+        public Set<Watcher> materialize(Watcher.Event.KeeperState state, Watcher.Event.EventType type, String clientPath) {
             Set<Watcher> result = new HashSet<Watcher>();
 
             switch (type) {
@@ -647,19 +644,28 @@ public class ZooKeeper implements AutoCloseable {
 
         /**
          * Register the watcher with the set of watches on path.
+         * 尝试在路径节点上添加watch的resuleCode 只有等于0才进入if
          *
          * @param rc the result code of the operation that attempted to
          *           add the watch on the path.
          */
         public void register(int rc) {
+            // rc = 0 表示需要添加watcher
+
             if (shouldAddWatch(rc)) {
+                // 根据rc的值返回不同类型Watcher的容器集合
+                // DataWatchRegistration   => dataWatches
+                // ExistsWatchRegistration => existWatches
+                // ChildWatchRegistration  => childWatches
                 Map<String, Set<Watcher>> watches = getWatches(rc);
                 synchronized (watches) {
+                    // clientPath为key，value是一个Watcher的set集合
                     Set<Watcher> watchers = watches.get(clientPath);
                     if (watchers == null) {
                         watchers = new HashSet<Watcher>();
                         watches.put(clientPath, watchers);
                     }
+                    // 每一个packet拥有自己的WatchRegistration对象
                     watchers.add(watcher);
                 }
             }
@@ -976,27 +982,30 @@ public class ZooKeeper implements AutoCloseable {
                      Watcher watcher, boolean canBeReadOnly, HostProvider aHostProvider, ZKClientConfig clientConfig) throws IOException {
         LOG.info("Initiating client connection, connectString={} sessionTimeout={} watcher={}",
                 connectString, sessionTimeout, watcher);
-
+        // 客户端配置
         if (clientConfig == null) {
             clientConfig = new ZKClientConfig();
         }
         this.clientConfig = clientConfig;
+        // 默认的watcher管理器  ZKWatchManager
         watchManager = defaultWatchManager();
+        // 默认的Watcher  MyWatcher 上面构建ZooKeeperAdmin传入的
         watchManager.defaultWatcher = watcher;
         ConnectStringParser connectStringParser = new ConnectStringParser(connectString);
         hostProvider = aHostProvider;
-
+        // 构建客户端上下文对象
+        // getClientCnxnSocket() 实例了 ClientCnxnSocket 对象
         cnxn = createConnection(connectStringParser.getChrootPath(), hostProvider, sessionTimeout,
                 this, watchManager, getClientCnxnSocket(), canBeReadOnly);
         cnxn.start();
     }
 
     // @VisibleForTesting
-    protected ClientCnxn createConnection(String chrootPath,HostProvider hostProvider,int sessionTimeout,
-                                          ZooKeeper zooKeeper,ClientWatchManager watcher,ClientCnxnSocket clientCnxnSocket,
+    protected ClientCnxn createConnection(String chrootPath, HostProvider hostProvider, int sessionTimeout,
+                                          ZooKeeper zooKeeper, ClientWatchManager watcher, ClientCnxnSocket clientCnxnSocket,
                                           boolean canBeReadOnly) throws IOException {
-        return new ClientCnxn(chrootPath,hostProvider,sessionTimeout,this,
-                watchManager,clientCnxnSocket,canBeReadOnly);
+        return new ClientCnxn(chrootPath, hostProvider, sessionTimeout, this,
+                watchManager, clientCnxnSocket, canBeReadOnly);
     }
 
     /**

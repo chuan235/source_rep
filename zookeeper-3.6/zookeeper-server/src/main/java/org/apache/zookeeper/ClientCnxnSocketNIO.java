@@ -60,6 +60,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     }
 
     /**
+     * org.apache.zookeeper.ClientCnxnSocketNIO#doIO
      * @throws InterruptedException
      * @throws IOException
      */
@@ -82,6 +83,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     recvCount.getAndIncrement();
                     readLength();
                 } else if (!initialized) {
+                    // 接收到服务器发送的连接响应
                     readConnectResult();
                     enableRead();
                     if (findSendablePacket(outgoingQueue, sendThread.tunnelAuthInProgress()) != null) {
@@ -257,7 +259,9 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
      * @throws IOException
      */
     void registerAndConnect(SocketChannel sock, InetSocketAddress addr) throws IOException {
+        // 注册连接事件
         sockKey = sock.register(selector, SelectionKey.OP_CONNECT);
+        // 建立连接
         boolean immediateConnect = sock.connect(addr);
         if (immediateConnect) {
             sendThread.primeConnection();
@@ -266,6 +270,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
 
     @Override
     void connect(InetSocketAddress addr) throws IOException {
+        // 创建非阻塞的socketChannel
         SocketChannel sock = createSock();
         try {
             registerAndConnect(sock, addr);
@@ -275,7 +280,6 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
             throw e;
         }
         initialized = false;
-
         /*
          * Reset incomingBuffer
          */
