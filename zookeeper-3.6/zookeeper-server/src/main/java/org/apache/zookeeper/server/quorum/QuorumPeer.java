@@ -306,7 +306,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                         || (serverParts.length > 4)) {
                     throw new ConfigException(addressStr + wrongFormat);
                 }
-
+                // 解析  host:port:port or host:port:port:type
                 // server_config should be either host:port:port or host:port:port:type
                 InetSocketAddress tempAddress;
                 InetSocketAddress tempElectionAddress;
@@ -1447,6 +1447,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                             }
                         } else {
                             try {
+                                // reconfigFlag = false
                                 reconfigFlagClear();
                                 if (shuttingDownLE) {
                                     shuttingDownLE = false;

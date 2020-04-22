@@ -19,11 +19,15 @@ package org.apache.zookeeper.server.quorum;
 
 import static org.junit.Assert.assertEquals;
 import java.net.InetSocketAddress;
+import java.util.Properties;
+
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZKTestCase;
 import org.apache.zookeeper.server.quorum.QuorumPeer.QuorumServer;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig.ConfigException;
+import org.apache.zookeeper.server.quorum.flexible.QuorumMaj;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 public class QuorumServerTest extends ZKTestCase {
@@ -37,6 +41,20 @@ public class QuorumServerTest extends ZKTestCase {
         System.clearProperty(QuorumPeer.CONFIG_KEY_MULTI_ADDRESS_ENABLED);
     }
 
+    @Before
+    public void setEnable(){
+        System.setProperty("zookeeper.multiAddress.enabled", Boolean.toString(true));
+    }
+
+    @Test
+    public void testQuormServer() throws ConfigException {
+
+        Properties p = new Properties();
+//        p.put("server.1", "127.0.0.1:1234:1236,192.168.222.131:2888:3888,192.168.222.141:2888:3888");
+        p.put("server.1", "127.0.0.1:1234:1236,192.168.222.131:2888:3888");
+        QuorumMaj maj = new QuorumMaj(p);
+        System.out.println(maj);
+    }
     @Test
     public void testToString() throws ConfigException {
         String provided = ipv4config + ":participant;0.0.0.0:1237";

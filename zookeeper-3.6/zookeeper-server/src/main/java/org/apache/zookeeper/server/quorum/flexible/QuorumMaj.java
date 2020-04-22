@@ -28,8 +28,7 @@ import org.apache.zookeeper.server.quorum.QuorumPeer.QuorumServer;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig.ConfigException;
 
 /**
- * This class implements a validator for majority quorums. The implementation is
- * straightforward.
+ * This class implements a validator for majority quorums. The implementation is straightforward.
  *
  */
 public class QuorumMaj implements QuorumVerifier {
@@ -89,9 +88,13 @@ public class QuorumMaj implements QuorumVerifier {
             if (key.startsWith("server.")) {
                 int dot = key.indexOf('.');
                 long sid = Long.parseLong(key.substring(dot + 1));
+                // 构建QuorumServer
                 QuorumServer qs = new QuorumServer(sid, value);
                 allMembers.put(Long.valueOf(sid), qs);
+                // 如果没有指定角色，默认就是 LearnerType.PARTICIPANT;
+                // participant / observer
                 if (qs.type == LearnerType.PARTICIPANT) {
+                    // 可投票的成员  Participant
                     votingMembers.put(Long.valueOf(sid), qs);
                 } else {
                     observingMembers.put(Long.valueOf(sid), qs);
@@ -132,6 +135,7 @@ public class QuorumMaj implements QuorumVerifier {
     /**
      * Verifies if a set is a majority. Assumes that ackSet contains acks only
      * from votingMembers
+     * 接收到选票的serverId是否超过了可投票的服务器的一半
      */
     public boolean containsQuorum(Set<Long> ackSet) {
         return (ackSet.size() > half);

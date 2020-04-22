@@ -19,6 +19,7 @@
 package org.apache.zookeeper.server.quorum;
 
 import static org.apache.zookeeper.common.NetUtils.formatInetAddr;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.Closeable;
@@ -60,6 +61,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.net.ssl.SSLSocket;
+
 import org.apache.zookeeper.common.NetUtils;
 import org.apache.zookeeper.common.X509Exception;
 import org.apache.zookeeper.server.ExitCode;
@@ -80,11 +82,11 @@ import org.slf4j.LoggerFactory;
  * maintains one connection for every pair of servers. The tricky part is to
  * guarantee that there is exactly one connection for every pair of servers that
  * are operating correctly and that can communicate over the network.
- *
+ * <p>
  * If two servers try to start a connection concurrently, then the connection
  * manager uses a very simple tie-breaking mechanism to decide which connection
  * to drop based on the IP addressed of the two parties.
- *
+ * <p>
  * For every peer, the manager maintains a queue of messages to send. If the
  * connection to any particular peer drops, then the sender thread puts the
  * message back on the list. As this implementation currently uses a queue
@@ -92,9 +94,8 @@ import org.slf4j.LoggerFactory;
  * message to the tail of the queue, thus changing the order of messages.
  * Although this is not a problem for the leader election, it could be a problem
  * when consolidating peer communication. This is to be verified, though.
- *
+ * Zookeeper服务器之间通信的应用层，使用socket发送和接收数据的封装
  */
-
 public class QuorumCnxManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(QuorumCnxManager.class);
@@ -119,8 +120,10 @@ public class QuorumCnxManager {
      * Protocol identifier used among peers (must be a negative number for backward compatibility reasons)
      */
     // the following protocol version was sent in every connection initiation message since ZOOKEEPER-107 released in 3.5.0
+    // 一个serverId支持一个server IP
     public static final long PROTOCOL_VERSION_V1 = -65536L;
     // ZOOKEEPER-3188 introduced multiple addresses in the connection initiation message, released in 3.6.0
+    // 支持一个serverId对应多台服务器  server.1=zoo1-net1:2888:3888,zoo1-net2:2888:3888,zoo1-net3:2888:3888
     public static final long PROTOCOL_VERSION_V2 = -65535L;
 
     /*
@@ -200,21 +203,22 @@ public class QuorumCnxManager {
      */
     static final Supplier<Socket> DEFAULT_SOCKET_FACTORY = () -> new Socket();
     private static Supplier<Socket> SOCKET_FACTORY = DEFAULT_SOCKET_FACTORY;
+
     static void setSocketFactory(Supplier<Socket> factory) {
         SOCKET_FACTORY = factory;
     }
 
 
     public static class Message {
+        // 数据
+        ByteBuffer buffer;
+        // serverId
+        long sid;
 
         Message(ByteBuffer buffer, long sid) {
             this.buffer = buffer;
             this.sid = sid;
         }
-
-        ByteBuffer buffer;
-        long sid;
-
     }
 
     /*
@@ -297,7 +301,7 @@ public class QuorumCnxManager {
         /**
          * Returns true if the specified hostname is a wildcard address,
          * like 0.0.0.0 for IPv4 or :: for IPv6
-         *
+         * <p>
          * (the function is package-private to be visible for testing)
          */
         static boolean isWildcardAddress(final String hostname) {
@@ -316,8 +320,8 @@ public class QuorumCnxManager {
     }
 
     public QuorumCnxManager(QuorumPeer self, final long mySid, Map<Long, QuorumPeer.QuorumServer> view,
-        QuorumAuthServer authServer, QuorumAuthLearner authLearner, int socketTimeout, boolean listenOnAllIPs,
-        int quorumCnxnThreadsSize, boolean quorumSaslAuthEnabled) {
+                            QuorumAuthServer authServer, QuorumAuthLearner authLearner, int socketTimeout, boolean listenOnAllIPs,
+                            int quorumCnxnThreadsSize, boolean quorumSaslAuthEnabled) {
 
         this.recvQueue = new CircularBlockingQueue<>(RECV_CAPACITY);
         this.queueSendMap = new ConcurrentHashMap<>();
@@ -355,10 +359,10 @@ public class QuorumCnxManager {
         final ThreadGroup group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
 
         final ThreadFactory daemonThFactory = runnable -> new Thread(group, runnable,
-            String.format("QuorumConnectionThread-[myid=%d]-%d", mySid, threadIndex.getAndIncrement()));
+                String.format("QuorumConnectionThread-[myid=%d]-%d", mySid, threadIndex.getAndIncrement()));
 
         this.connectionExecutor = new ThreadPoolExecutor(3, quorumCnxnThreadsSize, 60, TimeUnit.SECONDS,
-                                                         new SynchronousQueue<>(), daemonThFactory);
+                new SynchronousQueue<>(), daemonThFactory);
         this.connectionExecutor.allowCoreThreadTimeOut(true);
     }
 
@@ -388,18 +392,19 @@ public class QuorumCnxManager {
                 sock = SOCKET_FACTORY.get();
             }
             setSockOpts(sock);
+            // 连接 Follower
             sock.connect(electionAddr.getReachableOrOne(), cnxTO);
             if (sock instanceof SSLSocket) {
                 SSLSocket sslSock = (SSLSocket) sock;
                 sslSock.startHandshake();
                 LOG.info("SSL handshake complete with {} - {} - {}",
-                         sslSock.getRemoteSocketAddress(),
-                         sslSock.getSession().getProtocol(),
-                         sslSock.getSession().getCipherSuite());
+                        sslSock.getRemoteSocketAddress(),
+                        sslSock.getSession().getProtocol(),
+                        sslSock.getSession().getCipherSuite());
             }
 
             LOG.debug("Connected to server {} using election address: {}:{}",
-                      sid, sock.getInetAddress(), sock.getPort());
+                    sid, sock.getInetAddress(), sock.getPort());
         } catch (X509Exception e) {
             LOG.warn("Cannot open secure channel to {} at election address {}", sid, electionAddr, e);
             closeSocket(sock);
@@ -414,10 +419,10 @@ public class QuorumCnxManager {
             startConnection(sock, sid);
         } catch (IOException e) {
             LOG.error(
-              "Exception while connecting, id: {}, addr: {}, closing learner connection",
-              sid,
-              sock.getRemoteSocketAddress(),
-              e);
+                    "Exception while connecting, id: {}, addr: {}, closing learner connection",
+                    sid,
+                    sock.getRemoteSocketAddress(),
+                    e);
             closeSocket(sock);
         }
     }
@@ -434,6 +439,7 @@ public class QuorumCnxManager {
             return true;
         }
         try {
+            // 开启一个任务执行连接请求
             connectionExecutor.execute(new QuorumConnectionReqThread(electionAddr, sid));
             connectionThreadCnt.incrementAndGet();
         } catch (Throwable e) {
@@ -453,6 +459,7 @@ public class QuorumCnxManager {
     private class QuorumConnectionReqThread extends ZooKeeperThread {
         final MultipleAddresses electionAddr;
         final Long sid;
+
         QuorumConnectionReqThread(final MultipleAddresses electionAddr, final Long sid) {
             super("QuorumConnectionReqThread-" + sid);
             this.electionAddr = electionAddr;
@@ -481,22 +488,28 @@ public class QuorumCnxManager {
             dout = new DataOutputStream(buf);
 
             // Sending id and challenge
+            // 发送id和当前服务器的ip
 
             // First sending the protocol version (in other words - message type).
             // For backward compatibility reasons we stick to the old protocol version, unless the MultiAddress
             // feature is enabled. During rolling upgrade, we must make sure that all the servers can
             // understand the protocol version we use to avoid multiple partitions. see ZOOKEEPER-3720
+            // protocol version ->  消息的类型 V2表示一个serverId支持多个服务ip
+            // V2: 建立连接时
             long protocolVersion = self.isMultiAddressEnabled() ? PROTOCOL_VERSION_V2 : PROTOCOL_VERSION_V1;
             dout.writeLong(protocolVersion);
             dout.writeLong(self.getId());
 
             // now we send our election address. For the new protocol version, we can send multiple addresses.
             Collection<InetSocketAddress> addressesToSend = protocolVersion == PROTOCOL_VERSION_V2
+                    // 支持v2获取所有的ip
                     ? self.getElectionAddress().getAllAddresses()
+                    // 只有一个ip
                     : Arrays.asList(self.getElectionAddress().getOne());
 
             String addr = addressesToSend.stream()
                     .map(NetUtils::formatInetAddr).collect(Collectors.joining("|"));
+            // 将地址发出去
             byte[] addr_bytes = addr.getBytes();
             dout.writeInt(addr_bytes.length);
             dout.write(addr_bytes);
@@ -518,6 +531,7 @@ public class QuorumCnxManager {
 
         // If lost the challenge, then drop the new connection
         if (sid > self.getId()) {
+            // 不能连接比自己的sid大的服务器
             LOG.info("Have smaller server identifier, so dropping the connection: (myId:{} --> sid:{})", self.getId(), sid);
             closeSocket(sock);
             // Otherwise proceed with the connection
@@ -534,9 +548,9 @@ public class QuorumCnxManager {
             }
 
             senderWorkerMap.put(sid, sw);
-
+            // 这里put的时候，应该已经存在了，所以这里会直接返回已存在的CircularBlockingQueue队列
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
-
+            // 选票的发送就是在 SendWorker
             sw.start();
             rw.start();
 
@@ -551,7 +565,6 @@ public class QuorumCnxManager {
      * connection if it wins. Notice that it checks whether it has a connection
      * to this server already or not. If it does, then it sends the smallest
      * possible long value to lose the challenge.
-     *
      */
     public void receiveConnection(final Socket sock) {
         DataInputStream din = null;
@@ -589,6 +602,7 @@ public class QuorumCnxManager {
     private class QuorumConnectionReceiverThread extends ZooKeeperThread {
 
         private final Socket sock;
+
         QuorumConnectionReceiverThread(final Socket sock) {
             super("QuorumConnectionReceiverThread-" + sock.getRemoteSocketAddress());
             this.sock = sock;
@@ -605,6 +619,7 @@ public class QuorumCnxManager {
      * 处理socket连接
      * 这里接收的客户端对应的serverId必须要比当前的serverId大
      * 相反的话，当前的server会主动去连那个serverId小的server
+     *
      * @param sock
      * @param din
      * @throws IOException
@@ -672,12 +687,13 @@ public class QuorumCnxManager {
         } else if (sid == self.getId()) {
             // we saw this case in ZOOKEEPER-2164
             LOG.warn("We got a connection request from a server with our own ID. "
-                     + "This should be either a configuration error, or a bug.");
+                    + "This should be either a configuration error, or a bug.");
         } else {
             // Otherwise start worker threads to receive data.
             // 如果客户端的serverId大于了当前的serverId，则不能主动去连接它
             // 开启接收和发送数据的线程 ，接收和发送数据
             SendWorker sw = new SendWorker(sock, sid);
+            // 主要是接收serverId大的服务器发过来的数据
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
 
@@ -701,19 +717,16 @@ public class QuorumCnxManager {
      * only leader election uses it.
      */
     public void toSend(Long sid, ByteBuffer b) {
-        /*
-         * If sending message to myself, then simply enqueue it (loopback).
-         */
+        // If sending message to myself, then simply enqueue it (loopback).
         if (this.mySid == sid) {
             b.position(0);
+            // 如果是发送给自己的信息，就直接放入接收队列  recvQueue
             addToRecvQueue(new Message(b.duplicate(), sid));
-            /*
-             * Otherwise send to the corresponding thread to send.
-             */
+            // Otherwise send to the corresponding thread to send.
         } else {
-            /*
-             * Start a new connection if doesn't have one already.
-             */
+            // Start a new connection if doesn't have one already.
+            // 不是投给自己的选票，将数据放入 queueSendMap 中，等待发送
+            // 添加到 queueSendMap 中，serverID: data
             BlockingQueue<ByteBuffer> bq = queueSendMap.computeIfAbsent(sid, serverId -> new CircularBlockingQueue<>(SEND_CAPACITY));
             addToSendQueue(bq, b);
             connectOne(sid);
@@ -723,11 +736,12 @@ public class QuorumCnxManager {
     /**
      * Try to establish a connection to server with id sid using its electionAddr.
      * The function will return quickly and the connection will be established asynchronously.
-     *
+     * <p>
      * VisibleForTesting.
      * 根据serverid和ip去建立连接
-     *  @param sid  server id
-     *  @return boolean success indication
+     *
+     * @param sid server id
+     * @return boolean success indication
      */
     synchronized boolean connectOne(long sid, MultipleAddresses electionAddr) {
         // 如果没有建立连接，才会去连接
@@ -752,11 +766,12 @@ public class QuorumCnxManager {
      * Try to establish a connection to server with id sid.
      * The function will return quickly and the connection will be established asynchronously.
      * 根据serverid建立连接
-     *  @param sid  server id
      *
+     * @param sid server id
      */
     synchronized void connectOne(long sid) {
         if (senderWorkerMap.get(sid) != null) {
+            // 已经建立的连接
             LOG.debug("There is a connection already for server {}", sid);
             if (self.isMultiAddressEnabled() && self.isMultiAddressReachabilityCheckEnabled()) {
                 // since ZOOKEEPER-3188 we can use multiple election addresses to reach a server. It is possible, that the
@@ -766,6 +781,7 @@ public class QuorumCnxManager {
             }
             return;
         }
+        // 还没有建立连接
         synchronized (self.QV_LOCK) {
             boolean knownId = false;
             // Resolve hostname for the remote server before attempting to
@@ -782,8 +798,8 @@ public class QuorumCnxManager {
                 }
             }
             if (lastSeenQV != null
-                && lastProposedView.containsKey(sid)
-                && (!knownId
+                    && lastProposedView.containsKey(sid)
+                    && (!knownId
                     || (lastProposedView.get(sid).electionAddr != lastCommittedView.get(sid).electionAddr))) {
                 knownId = true;
                 LOG.debug("Server {} knows {} already, it is in the lastProposedView", self.getId(), sid);
@@ -864,8 +880,7 @@ public class QuorumCnxManager {
     /**
      * Helper method to set socket options.
      *
-     * @param sock
-     *            Reference to socket
+     * @param sock Reference to socket
      */
     private void setSockOpts(Socket sock) throws SocketException {
         sock.setTcpNoDelay(true);
@@ -876,8 +891,7 @@ public class QuorumCnxManager {
     /**
      * Helper method to close a socket.
      *
-     * @param sock
-     *            Reference to socket
+     * @param sock Reference to socket
      */
     private void closeSocket(Socket sock) {
         if (sock == null) {
@@ -942,10 +956,10 @@ public class QuorumCnxManager {
                 portBindMaxRetry = maxRetry;
             } else {
                 LOG.info(
-                  "'{}' contains invalid value: {}(must be >= 0). Use default value of {} instead.",
-                  ELECTION_PORT_BIND_RETRY,
-                  maxRetry,
-                  DEFAULT_PORT_BIND_MAX_RETRY);
+                        "'{}' contains invalid value: {}(must be >= 0). Use default value of {} instead.",
+                        ELECTION_PORT_BIND_RETRY,
+                        maxRetry,
+                        DEFAULT_PORT_BIND_MAX_RETRY);
                 portBindMaxRetry = DEFAULT_PORT_BIND_MAX_RETRY;
             }
         }
@@ -972,7 +986,7 @@ public class QuorumCnxManager {
                 CountDownLatch latch = new CountDownLatch(addresses.size());
                 // 每一个选举地址 都会有一个ListenerHandler对应
                 listenerHandlers = addresses.stream().map(address ->
-                                new ListenerHandler(address, self.shouldUsePortUnification(), self.isSslQuorum(), latch))
+                        new ListenerHandler(address, self.shouldUsePortUnification(), self.isSslQuorum(), latch))
                         .collect(Collectors.toList());
                 // 提交listenerHandlers
                 ExecutorService executor = Executors.newFixedThreadPool(addresses.size());
@@ -999,10 +1013,10 @@ public class QuorumCnxManager {
             LOG.info("Leaving listener");
             if (!shutdown) {
                 LOG.error(
-                  "As I'm leaving the listener thread, I won't be able to participate in leader election any longer: {}",
-                  self.getElectionAddress().getAllAddresses().stream()
-                    .map(NetUtils::formatInetAddr)
-                    .collect(Collectors.joining("|")));
+                        "As I'm leaving the listener thread, I won't be able to participate in leader election any longer: {}",
+                        self.getElectionAddress().getAllAddresses().stream()
+                                .map(NetUtils::formatInetAddr)
+                                .collect(Collectors.joining("|")));
                 if (socketException.get()) {
                     // After leaving listener thread, the host cannot join the quorum anymore,
                     // this is a severe error that we cannot recover from, so we need to exit
@@ -1136,10 +1150,10 @@ public class QuorumCnxManager {
                 }
                 if (!shutdown) {
                     LOG.error(
-                      "Leaving listener thread for address {} after {} errors. Use {} property to increase retry count.",
-                      formatInetAddr(address),
-                      numRetries,
-                      ELECTION_PORT_BIND_RETRY);
+                            "Leaving listener thread for address {} after {} errors. Use {} property to increase retry count.",
+                            formatInetAddr(address),
+                            numRetries,
+                            ELECTION_PORT_BIND_RETRY);
                 }
             }
 
@@ -1183,10 +1197,8 @@ public class QuorumCnxManager {
          * An instance of this thread receives messages to send
          * through a queue and sends them to the server sid.
          *
-         * @param sock
-         *            Socket to remote peer
-         * @param sid
-         *            Server identifier of remote peer
+         * @param sock Socket to remote peer
+         * @param sid  Server identifier of remote peer
          */
         SendWorker(Socket sock, Long sid) {
             super("SendWorker:" + sid);
@@ -1250,7 +1262,9 @@ public class QuorumCnxManager {
                 LOG.error("BufferUnderflowException ", be);
                 return;
             }
+            // 数据长度 int
             dout.writeInt(b.capacity());
+            // 选票信息
             dout.write(b.array());
             dout.flush();
         }
@@ -1289,7 +1303,7 @@ public class QuorumCnxManager {
 
             try {
                 while (running && !shutdown && sock != null) {
-
+                    // 取出需要发送的byteBuffer 通过socket发送出去
                     ByteBuffer b = null;
                     try {
                         BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid);
@@ -1310,10 +1324,10 @@ public class QuorumCnxManager {
                 }
             } catch (Exception e) {
                 LOG.warn(
-                    "Exception when using channel: for id {} my id = {}",
-                    sid ,
-                    QuorumCnxManager.this.mySid,
-                    e);
+                        "Exception when using channel: for id {} my id = {}",
+                        sid,
+                        QuorumCnxManager.this.mySid,
+                        e);
             }
             this.finish();
 
@@ -1336,9 +1350,9 @@ public class QuorumCnxManager {
                         } catch (NullPointerException | IOException ignored) {
                         }
                         LOG.warn(
-                          "destination address {} not reachable anymore, shutting down the SendWorker for sid {}",
-                          address.toString(),
-                          sid);
+                                "destination address {} not reachable anymore, shutting down the SendWorker for sid {}",
+                                address.toString(),
+                                sid);
                         this.finish();
                     }
                 }).start();
@@ -1417,10 +1431,10 @@ public class QuorumCnxManager {
                 }
             } catch (Exception e) {
                 LOG.warn(
-                    "Connection broken for id {}, my id = {}",
-                    sid,
-                    QuorumCnxManager.this.mySid,
-                    e);
+                        "Connection broken for id {}, my id = {}",
+                        sid,
+                        QuorumCnxManager.this.mySid,
+                        e);
             } finally {
                 LOG.warn("Interrupting SendWorker thread from RecvWorker. sid: {}. myId: {}", sid, QuorumCnxManager.this.mySid);
                 sw.finish();
@@ -1436,23 +1450,22 @@ public class QuorumCnxManager {
      * removed and the new item is inserted at the tail of the queue. This is done
      * to prevent a thread from blocking while inserting an element in the queue.
      *
-     * @param queue Reference to the Queue
+     * @param queue  Reference to the Queue
      * @param buffer Reference to the buffer to be inserted in the queue
      */
     private void addToSendQueue(final BlockingQueue<ByteBuffer> queue,
-        final ByteBuffer buffer) {
+                                final ByteBuffer buffer) {
         final boolean success = queue.offer(buffer);
         if (!success) {
-          throw new RuntimeException("Could not insert into receive queue");
+            throw new RuntimeException("Could not insert into receive queue");
         }
     }
 
     /**
      * Returns true if queue is empty.
-     * @param queue
-     *          Reference to the queue
-     * @return
-     *      true if the specified queue is empty
+     *
+     * @param queue Reference to the queue
+     * @return true if the specified queue is empty
      */
     private boolean isSendQueueEmpty(final BlockingQueue<ByteBuffer> queue) {
         return queue.isEmpty();
@@ -1462,12 +1475,12 @@ public class QuorumCnxManager {
      * Retrieves and removes buffer at the head of this queue,
      * waiting up to the specified wait time if necessary for an element to
      * become available.
-     *
+     * <p>
      * {@link BlockingQueue#poll(long, java.util.concurrent.TimeUnit)}
      */
     private ByteBuffer pollSendQueue(final BlockingQueue<ByteBuffer> queue,
-          final long timeout, final TimeUnit unit) throws InterruptedException {
-       return queue.poll(timeout, unit);
+                                     final long timeout, final TimeUnit unit) throws InterruptedException {
+        return queue.poll(timeout, unit);
     }
 
     /**
@@ -1478,22 +1491,22 @@ public class QuorumCnxManager {
      * @param msg Reference to the message to be inserted in the queue
      */
     public void addToRecvQueue(final Message msg) {
-      final boolean success = this.recvQueue.offer(msg);
-      if (!success) {
-          throw new RuntimeException("Could not insert into receive queue");
-      }
+        final boolean success = this.recvQueue.offer(msg);
+        if (!success) {
+            throw new RuntimeException("Could not insert into receive queue");
+        }
     }
 
     /**
      * Retrieves and removes a message at the head of this queue,
      * waiting up to the specified wait time if necessary for an element to
      * become available.
-     *
+     * <p>
      * {@link BlockingQueue#poll(long, java.util.concurrent.TimeUnit)}
      */
     public Message pollRecvQueue(final long timeout, final TimeUnit unit)
-       throws InterruptedException {
-       return this.recvQueue.poll(timeout, unit);
+            throws InterruptedException {
+        return this.recvQueue.poll(timeout, unit);
     }
 
     public boolean connectedToPeer(long peerSid) {

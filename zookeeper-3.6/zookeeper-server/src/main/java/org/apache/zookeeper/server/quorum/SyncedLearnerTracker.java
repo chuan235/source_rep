@@ -22,6 +22,13 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import org.apache.zookeeper.server.quorum.flexible.QuorumVerifier;
 
+/**
+ * 选票统计器：为本轮选举或事务投票提供一些统计性的功能
+ * 1.添加投票验证器以及初始化ackset，ackset是一个zookeeper服务发送ack应答列表
+ * 2.添加ack应答到相应的列表中
+ * 3.验证当前缓存的投票验证器中是否存在指定serverId的参与投票角色
+ * 4.检验是否通过本轮选举或事务投票
+ */
 public class SyncedLearnerTracker {
 
     protected ArrayList<QuorumVerifierAcksetPair> qvAcksetPairs = new ArrayList<QuorumVerifierAcksetPair>();
@@ -52,6 +59,8 @@ public class SyncedLearnerTracker {
 
     public boolean hasAllQuorums() {
         for (QuorumVerifierAcksetPair qvAckset : qvAcksetPairs) {
+            // 有没有超过一半的服务器投了和我一样的票，如果存在，说明验证通过
+            // qvAckset.getAckset() > half
             if (!qvAckset.getQuorumVerifier().containsQuorum(qvAckset.getAckset())) {
                 return false;
             }

@@ -66,14 +66,25 @@ public class QuorumHierarchical implements QuorumVerifier {
 
     private static final Logger LOG = LoggerFactory.getLogger(QuorumHierarchical.class);
 
+    /**
+     * 服务器的权重
+     */
     private HashMap<Long, Long> serverWeight = new HashMap<Long, Long>();
+    /**
+     * 服务器分组
+     */
     private HashMap<Long, Long> serverGroup = new HashMap<Long, Long>();
+    /**
+     * 每一个组的权重
+     */
     private HashMap<Long, Long> groupWeight = new HashMap<Long, Long>();
-
+    // 共有多少组
     private int numGroups = 0;
-
+    // 所有的server节点
     private Map<Long, QuorumServer> allMembers = new HashMap<Long, QuorumServer>();
+    // 所有的可投票server节点
     private Map<Long, QuorumServer> participatingMembers = new HashMap<Long, QuorumServer>();
+    // 所有的observer节点
     private Map<Long, QuorumServer> observingMembers = new HashMap<Long, QuorumServer>();
 
     private long version = 0;
@@ -325,6 +336,7 @@ public class QuorumHierarchical implements QuorumVerifier {
      * Verifies if a given set is a quorum.
      */
     public boolean containsQuorum(Set<Long> set) {
+        // <groupId,weight>
         HashMap<Long, Long> expansion = new HashMap<Long, Long>();
 
         /*
@@ -336,13 +348,16 @@ public class QuorumHierarchical implements QuorumVerifier {
         }
 
         for (long sid : set) {
+            // groupId
             Long gid = serverGroup.get(sid);
             if (gid == null) {
                 continue;
             }
             if (!expansion.containsKey(gid)) {
+
                 expansion.put(gid, serverWeight.get(sid));
             } else {
+                // 如果已经存在  将权重相加
                 long totalWeight = serverWeight.get(sid) + expansion.get(gid);
                 expansion.put(gid, totalWeight);
             }

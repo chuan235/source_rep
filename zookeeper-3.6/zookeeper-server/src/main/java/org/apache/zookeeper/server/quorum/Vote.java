@@ -41,6 +41,7 @@ public class Vote {
         // serverId对应服务器上最大的Zxid
         this.zxid = zxid;
         // 选举后的epoch 选出来的最大的epoch+1
+        // 每一次集群启动时会初始化为默认值  选举的届数
         this.electionEpoch = -1;
         // serverId服务器对应的epoch
         this.peerEpoch = peerEpoch;

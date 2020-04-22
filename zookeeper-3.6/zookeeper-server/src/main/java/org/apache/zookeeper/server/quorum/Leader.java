@@ -84,9 +84,13 @@ public class Leader extends LearnerMaster {
         LOG.info("TCP NoDelay set to: {}", nodelay);
     }
 
+    /**
+     * 提案
+     */
     public static class Proposal extends SyncedLearnerTracker {
-
+        // Leader跟Follower之间进行交互的数据包
         public QuorumPacket packet;
+        // 事务请求个体
         public Request request;
 
         @Override

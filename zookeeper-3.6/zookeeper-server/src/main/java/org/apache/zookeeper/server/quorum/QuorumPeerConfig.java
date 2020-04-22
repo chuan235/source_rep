@@ -505,10 +505,12 @@ public class QuorumPeerConfig {
         // backward compatibility - dynamic configuration in the same file as
         // static configuration params see writeDynamicConfig()
         if (dynamicConfigFileStr == null) {
+            // 解析server配置
             setupQuorumPeerConfig(zkProp, true);
             if (isDistributed() && isReconfigEnabled()) {
                 // we don't backup static config for standalone mode.
                 // we also don't backup if reconfig feature is disabled.
+                // 如果开启了动态配置，将传入的配置文件备份（reconfigEnabled）
                 backupOldConfig();
             }
         }
@@ -540,6 +542,7 @@ public class QuorumPeerConfig {
     /**
      * Backward compatibility -- It would backup static config file on bootup
      * if users write dynamic configuration in "zoo.cfg".
+     * 向后兼容-如果用户在“ zoo.cfg”中写入动态配置，它将在启动时备份静态配置文件
      */
     private void backupOldConfig() throws IOException {
         new AtomicFileWritingIdiom(new File(configFileStr + ".bak"), new OutputStreamStatement() {
@@ -670,16 +673,20 @@ public class QuorumPeerConfig {
             /*
              * The default QuorumVerifier is QuorumMaj
              */
-            //LOG.info("Defaulting to majority quorums");
+            LOG.info("Defaulting to majority quorums");
             return new QuorumMaj(dynamicConfigProp);
         }
     }
 
     void setupQuorumPeerConfig(Properties prop, boolean configBackwardCompatibilityMode) throws IOException, ConfigException {
         quorumVerifier = parseDynamicConfig(prop, electionAlg, true, configBackwardCompatibilityMode);
+        // 读取myId file
         setupMyId();
+        // 设置监听客户端addr
         setupClientPort();
+        // 设置节点类型
         setupPeerType();
+        // 校验参数 时间单位  最大连接数 sid
         checkValidity();
     }
 
@@ -701,9 +708,10 @@ public class QuorumPeerConfig {
                 throw new ConfigException("Unrecognised parameter: " + key);
             }
         }
-
+        // QuorumVerifier
+        // 如果有权重配置 - QuorumHierarchical
+        // 没有权重配置 - QuorumMaj
         QuorumVerifier qv = createQuorumVerifier(dynamicConfigProp, isHierarchical);
-
         int numParticipators = qv.getVotingMembers().size();
         int numObservers = qv.getObservingMembers().size();
         if (numParticipators == 0) {

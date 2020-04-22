@@ -15,11 +15,89 @@ final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
     FastLeaderElection#lookForLeader
 
 
+server.1=zoo1-net1:2888:3888,zoo1-net2:2888:3888
+server.2=zoo2-net1:2888:3888,zoo2-net2:2888:3888
+server.3=zoo3-net1:2888:3888
+
+org.apache.zookeeper.server.quorum.QuorumPeer.start
+
+
+开启Leader选举
+listener.start()
+1、每一个server配置了多少个net，就会有多少个ListenerHandler
+    每一个ListenerHandler监听一个net的选举端口
+        QuorumCnxManager.Listener.ListenerHandler.acceptConnections
+        都会阻塞在上面的方法中，等待其他server的连接请求
+FastLeaderElection#start
+
+2、启动发送和接收消息的线程
+    FastLeaderElection.Messenger.WorkerSender
+        从sendqueue队列中取出数据发送
+    FastLeaderElection.Messenger.WorkerReceiver
+        从recvQueue队列中取出接收到的数据
+
+org.apache.zookeeper.server.quorum.QuorumPeer#run
+
+    Looking状态，在这里循环发送接收选票 : org.apache.zookeeper.server.quorum.FastLeaderElection#lookForLeader
+
+    第一次发送自己的选票给所有的Follower  =>  sendNotifications => sendqueue.add(ToSend选票)
+        发送逻辑： FastLeaderElection.Messenger.WorkerSender#run 从sendqueue中取出选票  =>  process
+            => QuorumCnxManager#toSend => 不是发送给自己的（把serverId和数据放入queueSendMap中）
+            => 连接Follower => QuorumCnxManager#connectOne(ServerId) =>  QuorumCnxManager#connectOne(ServerId,electionAddr)
+            => initiateConnectionAsync开启一个任务去处理连接 => QuorumConnectionReqThread(electionAddr, sid)#run
+            => QuorumCnxManager#initiateConnection(electionAddr, sid) -> 与Follower建立连接
+            => QuorumCnxManager#startConnection处理连接
+                => 发送 protocolVersion + mySID + 自己的IP
+                如果当前客户端的serverId小于服务端的serverId  =>  关闭socket
+                否则: 初始化启动 SendWorker + RecvWorker
+            => SendWorker#run从queueSendMap取出待发送的队列  并从队列中取出ByteBuffer
+            => QuorumCnxManager.SendWorker#send 发送ByteBuffer
+                 dout.writeInt(b.capacity());
+                 dout.write(b.array());
+                 dout.flush();
+
+发送的数据
+ToSend notmsg = new ToSend(
+                    ToSend.mType.notification,
+                    proposedLeader,
+                    proposedZxid,
+                    logicalclock.get(),
+                    QuorumPeer.ServerState.LOOKING,
+                    sid,
+                    proposedEpoch,
+
+
+读取数据
+// 数据长度
+final int capacity = response.buffer.capacity();
+// 机器状态
+int rstate = response.buffer.getInt();
+// leader
+long rleader = response.buffer.getLong();
+// 最后一次的事务id
+long rzxid = response.buffer.getLong();
+// 选择的epoch
+long relectionEpoch = response.buffer.getLong();
+
+long rpeerepoch = response.buffer.getLong();
 
 
 
+配置文件的解析： QuorumPeerConfig#parseProperties
 
+解析server的配置: QuorumPeerConfig#setupQuorumPeerConfig
 
+解析过程： QuorumPeerConfig#parseDynamicConfig
+
+核心代码:  QuorumVerifier qv = createQuorumVerifier(dynamicConfigProp, isHierarchical);
+    存在负载均衡: new QuorumHierarchical
+    不存在，默认: new QuorumMaj
+
+    在new QuorumMaj中无法解析[server.1=zoo1-net1:2888:3888,zoo1-net2:2888:3888]这种配置的server
+
+    new QuorumServer() 里面解析server Addr , LearnerType , client Addr
+
+角色只能配置两种 participant / observer QuorumPeer.QuorumServer.getType
 
 
 
