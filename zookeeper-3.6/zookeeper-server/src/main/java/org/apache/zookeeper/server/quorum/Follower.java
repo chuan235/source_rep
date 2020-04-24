@@ -82,13 +82,17 @@ public class Follower extends Learner {
 
         try {
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
-            // 找到leader
+            // 从当前投票中找到leader
             QuorumServer leaderServer = findLeader();
             try {
                 // 连接到Leader
                 connectToLeader(leaderServer.addr, leaderServer.hostname);
                 // 向leader发送一个 FOLLOWERINFO packet ....  返回的是leader生成的最新的epoch
                 connectionTime = System.currentTimeMillis();
+                // 向Leader发送当前的epoch
+                // 并接收leader发送过来的最新的epoch
+                // 将新的epoch写入acceptedEpoch文件
+                // 写入后向leader发送确认接收新epoch的ACK
                 long newEpochZxid = registerWithLeader(Leader.FOLLOWERINFO);
                 if (self.isReconfigStateChange()) {
                     throw new Exception("learned about role change");
@@ -107,6 +111,7 @@ public class Follower extends Learner {
                 try {
                     self.setLeaderAddressAndId(leaderServer.addr, leaderServer.getId());
                     self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION);
+                    // 同步数据
                     syncWithLeader(newEpochZxid);
                     self.setZabState(QuorumPeer.ZabState.BROADCAST);
                     completedSync = true;

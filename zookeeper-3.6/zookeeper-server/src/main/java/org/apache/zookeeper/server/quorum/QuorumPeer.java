@@ -1524,6 +1524,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                         // 当前节点的角色是leader 主要分析Leader和follower的通信
                         LOG.info("LEADING");
                         try {
+                            // 构建Leader对象  => ZookeeperServer
                             setLeader(makeLeader(logFactory));
                             // Leader.lead
                             leader.lead();
@@ -1906,18 +1907,21 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                             + ". Current version: "
                             + quorumVerifier.getVersion());
                 }
-                // assuming that a version uniquely identifies a configuration, so if
-                // version is the same, nothing to do here.
+                // assuming that a version uniquely identifies a configuration, so if version is the same, nothing to do here.
+                // 版本与传入的版本相同，直接返回
                 if (lastSeenQuorumVerifier != null && lastSeenQuorumVerifier.getVersion() == qv.getVersion()) {
                     return;
                 }
                 lastSeenQuorumVerifier = qv;
                 if (qcm != null) {
+                    // 连接其他的服务器
                     connectNewPeers(qcm);
                 }
-
+                // 默认会写到磁盘
                 if (writeToDisk) {
                     try {
+                        // 生成  xxx..dynamic.next 文件  写入服务器配置信息和version
+                        // 和配置文件在同一个路径下  configFilename+.dynamic.next
                         String fileName = getNextDynamicConfigFilename();
                         if (fileName != null) {
                             QuorumPeerConfig.writeDynamicConfig(fileName, qv, true);
@@ -2234,6 +2238,11 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
     }
 
+    /**
+     * 设置 acceptedEpoch 并将其入acceptedEpoch文件
+     * @param e
+     * @throws IOException
+     */
     public void setAcceptedEpoch(long e) throws IOException {
         acceptedEpoch = e;
         writeLongToFile(ACCEPTED_EPOCH_FILENAME, e);

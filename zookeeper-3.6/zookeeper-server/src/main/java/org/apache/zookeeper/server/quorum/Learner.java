@@ -431,12 +431,16 @@ public class Learner {
      */
     protected long registerWithLeader(int pktType) throws IOException {
         // Send follower info, including last zxid and sid
+        // 当前节点的zxid
         long lastLoggedZxid = self.getLastLoggedZxid();
         QuorumPacket qp = new QuorumPacket();
         qp.setType(pktType);
+        // 将当前节点的 acceptedEpoch 发送给leader
+        // 这个acceptEpoch 并没有在选举的更改，选举中修改了currentVote选票
         qp.setZxid(ZxidUtils.makeZxid(self.getAcceptedEpoch(), 0));
 
         // Add sid to payload
+        // learner节点的信息
         LearnerInfo li = new LearnerInfo(self.getId(), 0x10000, self.getQuorumVerifier().getVersion());
         ByteArrayOutputStream bsid = new ByteArrayOutputStream();
         BinaryOutputArchive boa = BinaryOutputArchive.getArchive(bsid);
@@ -455,6 +459,7 @@ public class Learner {
             if (newEpoch > self.getAcceptedEpoch()) {
                 // 如果当前机器的 Epoch 小于 newEpoch 修改当前的Epoch，并且把旧的Epoch放入缓冲流中
                 wrappedEpochBytes.putInt((int) self.getCurrentEpoch());
+                // acceptEpoch  并将这个epoch写入acceptedEpoch文件
                 self.setAcceptedEpoch(newEpoch);
             } else if (newEpoch == self.getAcceptedEpoch()) {
                 // since we have already acked an epoch equal to the leaders, we cannot ack
@@ -511,13 +516,16 @@ public class Learner {
         synchronized (zk) {
             if (qp.getType() == Leader.DIFF) {
                 LOG.info("Getting a diff from the leader 0x{}", Long.toHexString(qp.getZxid()));
+                // 不需要同步快照的，只需要committedLog
                 self.setSyncMode(QuorumPeer.SyncMode.DIFF);
                 snapshotNeeded = false;
             } else if (qp.getType() == Leader.SNAP) {
+                // 接收的是 SNAP，同步快照中的数据
                 self.setSyncMode(QuorumPeer.SyncMode.SNAP);
                 LOG.info("Getting a snapshot from leader 0x{}", Long.toHexString(qp.getZxid()));
-                // The leader is going to dump the database
-                // db is clear as part of deserializeSnapshot()
+                // The leader is going to dump the database db is clear as part of deserializeSnapshot()
+                // 清理所有的数据，重新根据快照生成数据
+                // 读取快照数据，这个和上面的是两个不同的packet
                 zk.getZKDatabase().deserializeSnapshot(leaderIs);
                 // ZOOKEEPER-2819: overwrite config node content extracted
                 // from leader snapshot with local config, to avoid potential
@@ -531,12 +539,13 @@ public class Learner {
                     LOG.error("Missing signature. Got {}", signature);
                     throw new IOException("Missing signature");
                 }
+                // 更新lastProcessedZxid，最后一次打快照的zxid
                 zk.getZKDatabase().setlastProcessedZxid(qp.getZxid());
-
                 // immediately persist the latest snapshot when there is txn log gap
                 syncSnapshot = true;
             } else if (qp.getType() == Leader.TRUNC) {
-                //we need to truncate the log to the lastzxid of the leader
+                // we need to truncate the log to the lastzxid of the leader
+                // 需要移除部分数据
                 self.setSyncMode(QuorumPeer.SyncMode.TRUNC);
                 LOG.warn("Truncating log to get in sync with the leader 0x{}", Long.toHexString(qp.getZxid()));
                 boolean truncated = zk.getZKDatabase().truncateLog(qp.getZxid());
@@ -545,6 +554,7 @@ public class Learner {
                     LOG.error("Not able to truncate the log 0x{}", Long.toHexString(qp.getZxid()));
                     ServiceUtils.requestSystemExit(ExitCode.QUORUM_PACKET_ERROR.getValue());
                 }
+                // 更新lastProcessedZxid，最后一次打快照的zxid
                 zk.getZKDatabase().setlastProcessedZxid(qp.getZxid());
 
             } else {
@@ -560,8 +570,9 @@ public class Learner {
             // we take the snapshot on the UPDATE message, since Zab V1.0 also gets the UPDATE (after the NEWLEADER)
             // we need to make sure that we don't take the snapshot twice.
             boolean isPreZAB1_0 = true;
-            //If we are not going to take the snapshot be sure the transactions are not applied in memory
-            // but written out to the transaction log
+            // If we are not going to take the snapshot be sure the transactions are not applied in memory but written out to the transaction log
+            //  如果需要同步snap，这里的 writeToTxnLog = false
+            /// 不需要同步snap，这里的 writeToTxnLog = true
             boolean writeToTxnLog = !snapshotNeeded;
             TxnLogEntry logEntry;
             // we are now going to start getting transactions to apply followed by an UPTODATE
@@ -570,6 +581,7 @@ public class Learner {
                 readPacket(qp);
                 switch (qp.getType()) {
                 case Leader.PROPOSAL:
+                    // 接收leader发送的txId建议
                     PacketInFlight pif = new PacketInFlight();
                     logEntry = SerializeUtils.deserializeTxn(qp.getData());
                     pif.hdr = logEntry.getHeader();
@@ -588,7 +600,7 @@ public class Learner {
                         QuorumVerifier qv = self.configFromString(new String(setDataTxn.getData()));
                         self.setLastSeenQuorumVerifier(qv, true);
                     }
-
+                    // 将建议加入到链表中
                     packetsNotCommitted.add(pif);
                     break;
                 case Leader.COMMIT:
@@ -605,16 +617,21 @@ public class Learner {
                         }
                     }
                     if (!writeToTxnLog) {
+                        // 需要同步snap
+                        // 从建议列表中取出 PacketInFlight
                         if (pif.hdr.getZxid() != qp.getZxid()) {
                             LOG.warn(
                                 "Committing 0x{}, but next proposal is 0x{}",
                                 Long.toHexString(qp.getZxid()),
                                 Long.toHexString(pif.hdr.getZxid()));
                         } else {
+                            // 提交建议
                             zk.processTxn(pif.hdr, pif.rec);
                             packetsNotCommitted.remove();
                         }
                     } else {
+                        // 不需要同步snap
+                        // 加入到提交的队列汇总
                         packetsCommitted.add(qp.getZxid());
                     }
                     break;
@@ -690,16 +707,18 @@ public class Learner {
                     if (snapshotNeeded) {
                         zk.takeSnapshot(syncSnapshot);
                     }
-
+                    // 再次更新epoch
                     self.setCurrentEpoch(newEpoch);
                     writeToTxnLog = true; //Anything after this needs to go to the transaction log, not applied directly in memory
                     isPreZAB1_0 = false;
+                    // 回写一个ack的packet
                     writePacket(new QuorumPacket(Leader.ACK, newLeaderZxid, null, null), true);
                     break;
                 }
             }
         }
         ack.setZxid(ZxidUtils.makeZxid(newEpoch, 0));
+        // 发送ack到leader
         writePacket(ack, true);
         sock.setSoTimeout(self.tickTime * self.syncLimit);
         self.setSyncMode(QuorumPeer.SyncMode.NONE);

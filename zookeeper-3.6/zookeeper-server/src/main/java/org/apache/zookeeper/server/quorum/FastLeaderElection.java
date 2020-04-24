@@ -47,7 +47,7 @@ import org.slf4j.LoggerFactory;
  * There are a few parameters that can be tuned to change its behavior. First,
  * finalizeWait determines the amount of time to wait until deciding upon a leader.
  * This is part of the leader election algorithm.
- *
+ * <p>
  * 使用TCP实现领导者选举，使用QuorumCnxManager来管理连接，除此之外，其他和UDP一样，基于数据的推送
  * 有一些参数可以调整行为。 finalizeWait确定在确定领导者之前要等待的时间
  */
@@ -935,6 +935,8 @@ public class FastLeaderElection implements Election {
      * the leadingVoteSet if it becomes the leader.
      */
     private void setPeerState(long proposedLeader, SyncedLearnerTracker voteSet) {
+        // 最终选出来的serverId是不是本机
+        // 如果不是本机，根据配置信息判断是Follower还是Observer
         ServerState ss = (proposedLeader == self.getId()) ? ServerState.LEADING : learningState();
         self.setPeerState(ss);
         if (ss == ServerState.LEADING) {
@@ -1034,6 +1036,9 @@ public class FastLeaderElection implements Election {
                     // 接受到了返回的 Notification ，下面的参数n代表的就是投给自己或者是其他服务器发送过来的选票信息
                     switch (n.state) {
                         case LOOKING:
+                            System.out.println("接收到选票：leader=" + n.leader);
+                            System.out.println("接收到选票：zxid=" + n.zxid);
+                            System.out.println("接收到选票：peerEpoch=" + n.peerEpoch);
                             // 如果发送选票的服务器也处于LOOKING状态，也在进行领导者选举
                             if (getInitLastLoggedZxid() == -1) {
                                 LOG.debug("Ignoring notification as our zxid is -1");
@@ -1122,6 +1127,7 @@ public class FastLeaderElection implements Election {
                                     setPeerState(proposedLeader, voteSet);
                                     // 将最终的投票返回
                                     Vote endVote = new Vote(proposedLeader, proposedZxid, logicalclock.get(), proposedEpoch);
+                                    System.out.println("最终的选票" + endVote);
                                     // 清理接受队列
                                     leaveInstance(endVote);
                                     return endVote;

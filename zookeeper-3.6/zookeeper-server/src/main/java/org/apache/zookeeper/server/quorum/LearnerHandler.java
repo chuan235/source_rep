@@ -461,10 +461,13 @@ public class LearnerHandler extends ZooKeeperThread {
             ia = BinaryInputArchive.getArchive(bufferedInput);
             bufferedOutput = new BufferedOutputStream(sock.getOutputStream());
             oa = BinaryOutputArchive.getArchive(bufferedOutput);
-
             QuorumPacket qp = new QuorumPacket();
+            /**
+             * 接收 follower或者observer发送过来的 注册信息
+             * 这里发送过来的 protocolVersion = 0x10000 读入到qp中
+             * @see Learner#registerWithLeader
+             */
             ia.readRecord(qp, "packet");
-
             messageTracker.trackReceived(qp.getType());
             if (qp.getType() != Leader.FOLLOWERINFO && qp.getType() != Leader.OBSERVERINFO) {
                 LOG.error("First packet {} is not FOLLOWERINFO or OBSERVERINFO!", qp.toString());
@@ -476,6 +479,7 @@ public class LearnerHandler extends ZooKeeperThread {
                 throw new IOException("Non observer attempting to connect to ObserverMaster. type = " + qp.getType());
             }
             byte[] learnerInfoData = qp.getData();
+            // 读取客户端的serverId
             if (learnerInfoData != null) {
                 ByteBuffer bbsid = ByteBuffer.wrap(learnerInfoData);
                 if (learnerInfoData.length >= 8) {
@@ -493,9 +497,10 @@ public class LearnerHandler extends ZooKeeperThread {
             } else {
                 this.sid = learnerMaster.getAndDecrementFollowerCounter();
             }
-
+            // 从leader管理的集群中找serverId
             String followerInfo = learnerMaster.getPeerInfo(this.sid);
             if (followerInfo.isEmpty()) {
+                // 找不到，未知的server
                 LOG.info(
                     "Follower sid: {} not in the current config {}",
                     this.sid,
@@ -503,21 +508,23 @@ public class LearnerHandler extends ZooKeeperThread {
             } else {
                 LOG.info("Follower sid: {} : info : {}", this.sid, followerInfo);
             }
-
+            // 如果客户端是Observer
             if (qp.getType() == Leader.OBSERVERINFO) {
                 learnerType = LearnerType.OBSERVER;
             }
 
             learnerMaster.registerLearnerHandlerBean(this, sock);
-
+            // 获取客户端的zxid计算出对应的 Epoch
             long lastAcceptedEpoch = ZxidUtils.getEpochFromZxid(qp.getZxid());
 
             long peerLastZxid;
             StateSummary ss = null;
             long zxid = qp.getZxid();
+            // 产生新的 Epoch ，已连接中follower和leader中的最大的epoch+1
             long newEpoch = learnerMaster.getEpochToPropose(this.getSid(), lastAcceptedEpoch);
+            // 生成新的zxid
             long newLeaderZxid = ZxidUtils.makeZxid(newEpoch, 0);
-
+            // 这个肯定不小于，传递过来的 protocolVersion = 0x10000
             if (this.getVersion() < 0x10000) {
                 // we are going to have to extrapolate the epoch information
                 long epoch = ZxidUtils.getEpochFromZxid(zxid);
@@ -527,11 +534,13 @@ public class LearnerHandler extends ZooKeeperThread {
             } else {
                 byte[] ver = new byte[4];
                 ByteBuffer.wrap(ver).putInt(0x10000);
+                // 构建一个 LEADERINFO 类型的packet 传递 最新的 ZxId 和 Epoch
                 QuorumPacket newEpochPacket = new QuorumPacket(Leader.LEADERINFO, newLeaderZxid, ver, null);
                 oa.writeRecord(newEpochPacket, "packet");
                 messageTracker.trackSent(Leader.LEADERINFO);
                 bufferedOutput.flush();
                 QuorumPacket ackEpochPacket = new QuorumPacket();
+                // 读取follower节点响应的ACK包， 这个ack包中，就包含了同步之前的最后一次zxid epoch
                 ia.readRecord(ackEpochPacket, "packet");
                 messageTracker.trackReceived(ackEpochPacket.getType());
                 if (ackEpochPacket.getType() != Leader.ACKEPOCH) {
@@ -539,18 +548,22 @@ public class LearnerHandler extends ZooKeeperThread {
                     return;
                 }
                 ByteBuffer bbepoch = ByteBuffer.wrap(ackEpochPacket.getData());
+                // Zxid： 32的Epoch + 32位递增的proposal 这里的epoch可以是-1
                 ss = new StateSummary(bbepoch.getInt(), ackEpochPacket.getZxid());
+                // 等待zxid
                 learnerMaster.waitForEpochAck(this.getSid(), ss);
             }
+            // epoch已经确定，接下来就是同步数据的过程
             peerLastZxid = ss.getLastZxid();
 
             // Take any necessary action if we need to send TRUNC or DIFF
+            // 如果需要发送TRUNC或DIFF,请采取必须的措施.在任何情况下都将调用 startForwarding
             // startForwarding() will be called in all cases
             boolean needSnap = syncFollower(peerLastZxid, learnerMaster);
 
-            // syncs between followers and the leader are exempt from throttling because it
-            // is importatnt to keep the state of quorum servers up-to-date. The exempted syncs
-            // are counted as concurrent syncs though
+            // syncs between followers and the leader are exempt from throttling because it is importatnt to keep the state of quorum servers up-to-date.
+            // The exempted syncs are counted as concurrent syncs though  采用并发同步
+            // leader 与 follower 之间的同步不受限制。只需保证集群验证器中的数据最新即可
             boolean exemptFromThrottle = getLearnerType() != LearnerType.OBSERVER;
             /* if we are not truncating or sending a diff just send a snapshot */
             if (needSnap) {
@@ -773,15 +786,13 @@ public class LearnerHandler extends ZooKeeperThread {
      */
     boolean syncFollower(long peerLastZxid, LearnerMaster learnerMaster) {
         /*
-         * When leader election is completed, the leader will set its
-         * lastProcessedZxid to be (epoch < 32). There will be no txn associated
-         * with this zxid.
+         * When leader election is completed, the leader will set its lastProcessedZxid to be (epoch < 32).
+         * There will be no txn associated with this zxid.
          *
-         * The learner will set its lastProcessedZxid to the same value if
-         * it get DIFF or SNAP from the learnerMaster. If the same learner come
-         * back to sync with learnerMaster using this zxid, we will never find this
-         * zxid in our history. In this case, we will ignore TRUNC logic and
-         * always send DIFF if we have old enough history
+         * The learner will set its lastProcessedZxid to the same value if it get DIFF or SNAP from the learnerMaster.
+         * If the same learner come back to sync with learnerMaster using this zxid,
+         * we will never find this zxid in our history.
+         * In this case, we will ignore TRUNC logic and always send DIFF if we have old enough history
          */
         boolean isPeerNewEpochZxid = (peerLastZxid & 0xffffffffL) == 0;
         // Keep track of the latest zxid which already queued
@@ -808,8 +819,8 @@ public class LearnerHandler extends ZooKeeperThread {
 
             if (db.getCommittedLog().isEmpty()) {
                 /*
-                 * It is possible that committedLog is empty. In that case
-                 * setting these value to the latest txn in learnerMaster db
+                 * It is possible that committedLog is empty.
+                 * In that case setting these value to the latest txn in learnerMaster db
                  * will reduce the case that we need to handle
                  *
                  * Here is how each case handle by the if block below
@@ -830,11 +841,11 @@ public class LearnerHandler extends ZooKeeperThread {
              *    so we need to send TRUNC. However, if peer has newEpochZxid,
              *    we cannot send TRUNC since the follower has no txnlog
              * 4. Follower is within committedLog range or already in-sync.
-             *    We may need to send DIFF or TRUNC depending on follower's zxid
+             *    We may need to send DIFF or TRUNC depending on follower's zxid.
              *    We always send empty DIFF if follower is already in-sync
              * 5. Follower missed the committedLog. We will try to use on-disk
-             *    txnlog + committedLog to sync with follower. If that fail,
-             *    we will send snapshot
+             *    txnlog + committedLog to sync with follower. If that fail,we will send snapshot
+             *
              */
 
             if (forceSnapSync) {

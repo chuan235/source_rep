@@ -286,7 +286,7 @@ public class Leader extends LearnerMaster {
     public Leader(QuorumPeer self, LeaderZooKeeperServer zk) throws IOException {
         this.self = self;
         this.proposalStats = new BufferStats();
-
+        // 144:2889
         Set<InetSocketAddress> addresses;
         if (self.getQuorumListenOnAllIPs()) {
             addresses = self.getQuorumAddress().getWildcardAddresses();
@@ -452,7 +452,8 @@ public class Leader extends LearnerMaster {
             if (!stop.get() && !serverSockets.isEmpty()) {
                 ExecutorService executor = Executors.newFixedThreadPool(serverSockets.size());
                 CountDownLatch latch = new CountDownLatch(serverSockets.size());
-
+                // 对leader的服务器创建接收请求的线程  有可能一个server对应多个服务器，所以这里会循环
+                // server.2=server2-net1:2888:3888,server2-net2:2888:3888
                 serverSockets.forEach(serverSocket ->
                         executor.submit(new LearnerCnxAcceptorHandler(serverSocket, latch)));
 
@@ -492,8 +493,9 @@ public class Leader extends LearnerMaster {
             public void run() {
                 try {
                     Thread.currentThread().setName("LearnerCnxAcceptorHandler-" + serverSocket.getLocalSocketAddress());
-
+                    // stop == true时才会退出，并且会去countDown
                     while (!stop.get()) {
+                        // 接收follower的连接
                         acceptConnections();
                     }
                 } catch (Exception e) {
@@ -511,14 +513,15 @@ public class Leader extends LearnerMaster {
                 Socket socket = null;
                 boolean error = false;
                 try {
+                    // 阻塞
                     socket = serverSocket.accept();
 
                     // start with the initLimit, once the ack is processed
                     // in LearnerHandler switch to the syncLimit
                     socket.setSoTimeout(self.tickTime * self.initLimit);
                     socket.setTcpNoDelay(nodelay);
-
                     BufferedInputStream is = new BufferedInputStream(socket.getInputStream());
+                    // 把socket和输入流包装为一个 LearnerHandler 线程
                     LearnerHandler fh = new LearnerHandler(socket, is, Leader.this);
                     fh.start();
                 } catch (SocketException e) {
@@ -589,6 +592,7 @@ public class Leader extends LearnerMaster {
         zk.registerJMX(new LeaderBean(this, zk), self.jmxLocalPeerBean);
 
         try {
+            // ZAB 状态为 DISCOVERY
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
             self.tick.set(0);
             // 更新Leader的zxid和当前机器节点的session信息
@@ -614,9 +618,11 @@ public class Leader extends LearnerMaster {
             if ((newLeaderProposal.packet.getZxid() & 0xffffffffL) != 0) {
                 LOG.info("NEWLEADER proposal has Zxid of {}", Long.toHexString(newLeaderProposal.packet.getZxid()));
             }
-
+            // 最后提出的集群验证器
             QuorumVerifier lastSeenQV = self.getLastSeenQuorumVerifier();
+            // 获取自己的集群验证器
             QuorumVerifier curQV = self.getQuorumVerifier();
+            // 配置文件中没有指定version时，默认是0  当选举出来之后，希望去修改集群的version以便和后加入的服务器区分开
             if (curQV.getVersion() == 0 && curQV.getVersion() == lastSeenQV.getVersion()) {
                 // This was added in ZOOKEEPER-1783. The initial config has version 0 (not explicitly
                 // specified by the user; the lack of version in a config file is interpreted as version=0).
@@ -638,7 +644,9 @@ public class Leader extends LearnerMaster {
                 // hence before they construct the NEWLEADER message containing
                 // the last-seen-quorumverifier of the leader, which we change below
                 try {
+                    // 生成新的集群验证器，和自己的一样只是修改了version
                     QuorumVerifier newQV = self.configFromString(curQV.toString());
+                    // 设置新的version是leader的zxid
                     newQV.setVersion(zk.getZxid());
                     self.setLastSeenQuorumVerifier(newQV, true);
                 } catch (Exception e) {
@@ -655,6 +663,7 @@ public class Leader extends LearnerMaster {
             // We do this by waiting for the NEWLEADER packet to get acknowledged
             // 等待上面的 NEWLEADER packet的ack 响应
             waitForEpochAck(self.getId(), leaderStateSummary);
+            // 将新的epoch写入  currentEpoch 文件
             self.setCurrentEpoch(epoch);
             self.setLeaderAddressAndId(self.getQuorumAddress(), self.getId());
             self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION);
@@ -748,11 +757,13 @@ public class Leader extends LearnerMaster {
                         && self.getLastSeenQuorumVerifier().getVersion() > self.getQuorumVerifier().getVersion()) {
                         syncedAckSet.addQuorumVerifier(self.getLastSeenQuorumVerifier());
                     }
-
+                    // 每次进来都新建一个syncedAckSet，并将自己的serverId放入syncedAckSet中
                     syncedAckSet.addAck(self.getId());
-
+                    // 遍历所有的follower
                     for (LearnerHandler f : getLearners()) {
+                        // 检查这个follower是不是活着的，或者是否连接超时
                         if (f.synced()) {
+                            // 存放活着的follower
                             syncedAckSet.addAck(f.getSid());
                         }
                     }
@@ -775,6 +786,7 @@ public class Leader extends LearnerMaster {
                     tickSkip = !tickSkip;
                 }
                 for (LearnerHandler f : getLearners()) {
+                    // 调用follower的ping，向leader发送ping
                     f.ping();
                 }
             }
@@ -1416,7 +1428,9 @@ public class Leader extends LearnerMaster {
             QuorumVerifier verifier = self.getQuorumVerifier();
             // verifier.containsQuorum(connectingFollowers) 检测连接过来的follower是否已经超过一半，过半机制的验证
             // QuorumMaj.containsQuorum 过半机制算法
+            // 这里的self是指连接过来的服务器
             if (connectingFollowers.contains(self.getId()) && verifier.containsQuorum(connectingFollowers)) {
+                // 连接过来的是 follower 并且 满足过半机制
                 waitingForNewEpoch = false;
                 self.setAcceptedEpoch(epoch);
                 connectingFollowers.notifyAll();
