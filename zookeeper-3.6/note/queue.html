@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="textml; charset=utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+		<title>queue</title>
+		<meta name = "Keywords"  content="关键字,关键词"/>
+		<meta name = "description" content = ""/>
+	</head>
+	<body>
+		<script type="text/javascript">
+			let items = [];
+			function JSQueue(){
+				this.enqueue = function(element){
+					items.push(element);
+					console.log(items)
+				}
+				// 左边取
+				this.dequeue = function(){
+					return items.shift();
+				}
+				// 左边取，不删除
+				this.front = function(){
+					return items[0];
+				}
+				this.isEmpty = function(){
+					return items.length === 0;
+				}
+				this.print = function(){
+					console.log(items.toString());
+				}
+			}
+
+			// ES6
+			let Queue = (function(){
+				const items = new WeakMap();
+				class Queue {
+					constructor(){
+			            items.set(this,[])
+			        }
+			        enqueue(element){
+			            let q = items.get(this)
+			            q.push(element)
+			        }
+			        dequeue(){
+			            let q = items.get(this)
+			            let r = q.shift()
+			            return r
+			        }
+				}
+			})();
+
+
+			// AI Queue
+			function AIQueue(size){
+				this.enqueue = function(element){
+					if(items.length <= size){
+						items.push(element);
+						console.log(items)
+					}else{
+						console.log("队列已满...")
+					}
+				}
+				// 左边取
+				this.dequeue = function(){
+					return items.shift();
+				}
+				// 左边取，不删除
+				this.front = function(){
+					return items[0];
+				}
+				this.isEmpty = function(){
+					return items.length === 0;
+				}
+				this.print = function(){
+					console.log(items.toString());
+				}
+			}
+
+		</script>
+	</body>
+</html>
