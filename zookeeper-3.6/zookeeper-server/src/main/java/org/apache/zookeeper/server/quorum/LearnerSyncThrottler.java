@@ -69,8 +69,8 @@ public class LearnerSyncThrottler {
     /**
      * Indicates that a new sync is about to be sent.
      *
-     * @param essential if <code>true</code>, do not throw an exception even
-     *                  if throttling limit is reached
+     * @param essential if <code>true</code>, do not throw an exception even if throttling limit is reached
+     *
      * @throws SyncThrottleException if throttling limit has been exceeded
      *                                   and <code>essential == false</code>,
      *                                   even after waiting for the timeout
@@ -80,7 +80,7 @@ public class LearnerSyncThrottler {
      *                              timeout is zero
      */
     protected void beginSync(boolean essential) throws SyncThrottleException, InterruptedException {
-
+        // 如果是oberver过来就直接  ++ 了
         synchronized (countSyncObject) {
             if (essential || syncInProgress < maxConcurrentSyncs) {
                 syncInProgress++;

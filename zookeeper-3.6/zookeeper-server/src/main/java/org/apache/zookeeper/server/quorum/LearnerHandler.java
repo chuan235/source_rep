@@ -309,28 +309,30 @@ public class LearnerHandler extends ZooKeeperThread {
     }
 
     /**
-     * This method will use the thread to send packets added to the
-     * queuedPackets list
+     * This method will use the thread to send packets added to the queuedPackets list
+     *
      *
      * @throws InterruptedException
      */
     private void sendPackets() throws InterruptedException {
         long traceMask = ZooTrace.SERVER_PACKET_TRACE_MASK;
+        // 死循环
         while (true) {
             try {
                 QuorumPacket p;
+                // 首先去poll
                 p = queuedPackets.poll();
                 if (p == null) {
                     bufferedOutput.flush();
+                    // poll不到  就take阻塞在这里
                     p = queuedPackets.take();
                 }
-
+                // 监控队列的大小  packet的数量
                 ServerMetrics.getMetrics().LEARNER_HANDLER_QP_SIZE.add(Long.toString(this.sid), queuedPackets.size());
-
+                // MarkerQuorumPacket 表示这个packet只是用来统计的
                 if (p instanceof MarkerQuorumPacket) {
                     MarkerQuorumPacket m = (MarkerQuorumPacket) p;
-                    ServerMetrics.getMetrics().LEARNER_HANDLER_QP_TIME
-                        .add(Long.toString(this.sid), (System.nanoTime() - m.time) / 1000000L);
+                    ServerMetrics.getMetrics().LEARNER_HANDLER_QP_TIME.add(Long.toString(this.sid), (System.nanoTime() - m.time) / 1000000L);
                     continue;
                 }
 
@@ -343,17 +345,19 @@ public class LearnerHandler extends ZooKeeperThread {
                     traceMask = ZooTrace.SERVER_PING_TRACE_MASK;
                 }
                 if (p.getType() == Leader.PROPOSAL) {
+                    // 更新发送提议的时间
                     syncLimitCheck.updateProposal(p.getZxid(), System.nanoTime());
                 }
                 if (LOG.isTraceEnabled()) {
                     ZooTrace.logQuorumPacket(LOG, traceMask, 'o', p);
                 }
-
                 // Log the zxid of the last request, if it is a valid zxid.
                 if (p.getZxid() > 0) {
                     lastZxid = p.getZxid();
                 }
+                // 写入流
                 oa.writeRecord(p, "packet");
+                // 统计send数
                 packetsSent.incrementAndGet();
                 messageTracker.trackSent(p.getType());
             } catch (IOException e) {
@@ -554,8 +558,19 @@ public class LearnerHandler extends ZooKeeperThread {
                 learnerMaster.waitForEpochAck(this.getSid(), ss);
             }
             // epoch已经确定，接下来就是同步数据的过程
+            // 这里获取learner节点上的最后一次事务zxid  =>  old epoch
             peerLastZxid = ss.getLastZxid();
-
+            /**
+             * 在这里实现了先回滚在差异化同步的逻辑吗？  实现了的（这里传递过来的zxid是learner上的上一次epoch生成的事务id）
+             * @see LearnerHandler#queueCommittedProposals
+            这里就会从快照中找出比peerLastZxid大的所有记录外加一个比peerLastZxid小的记录，并且循坏这些快照记录，首先是集合中的最小的zxid和learner的zxid进行比较
+            1、这两个相等，那么就发送diff，下次就不用再来判断了
+            2、如果不相等就只有可能是集合中的zxid > learnerZxid ，这就说明learnerZxid对应的记录在leader中不存在，
+                这里就要使用trun让learner回滚到 prevProposalZxid 附近，后续直接将prevProposalZxid之后的记录发送给learner
+                learner的prevProposalZxid记录会保留
+             * 新加入的follower也会在这里同步数据吗？   会的
+             *
+             */
             // Take any necessary action if we need to send TRUNC or DIFF
             // 如果需要发送TRUNC或DIFF,请采取必须的措施.在任何情况下都将调用 startForwarding
             // startForwarding() will be called in all cases
@@ -564,17 +579,22 @@ public class LearnerHandler extends ZooKeeperThread {
             // syncs between followers and the leader are exempt from throttling because it is importatnt to keep the state of quorum servers up-to-date.
             // The exempted syncs are counted as concurrent syncs though  采用并发同步
             // leader 与 follower 之间的同步不受限制。只需保证集群验证器中的数据最新即可
+
             boolean exemptFromThrottle = getLearnerType() != LearnerType.OBSERVER;
-            /* if we are not truncating or sending a diff just send a snapshot */
+
+            /** if we are not truncating or sending a diff just send a snapshot */
             if (needSnap) {
                 syncThrottler = learnerMaster.getLearnerSnapSyncThrottler();
+                // follower -> true
+                // observer -> false
+                // 统计同步数据的节点数量
                 syncThrottler.beginSync(exemptFromThrottle);
                 try {
                     long zxidToSend = learnerMaster.getZKDatabase().getDataTreeLastProcessedZxid();
+                    // 先发送一个标志  表示要发送快照数据了  这里是直接写入到socket中了
                     oa.writeRecord(new QuorumPacket(Leader.SNAP, zxidToSend, null, null), "packet");
                     messageTracker.trackSent(Leader.SNAP);
                     bufferedOutput.flush();
-
                     LOG.info(
                         "Sending snapshot last zxid of peer is 0x{}, zxid of leader is 0x{}, "
                             + "send zxid of db as 0x{}, {} concurrent snapshot sync, "
@@ -605,19 +625,21 @@ public class LearnerHandler extends ZooKeeperThread {
                 QuorumPacket newLeaderQP = new QuorumPacket(Leader.NEWLEADER, newLeaderZxid, null, null);
                 oa.writeRecord(newLeaderQP, "packet");
             } else {
+                // 当leader当前的第一个zxid  发送给learner
+                // 表示后续生成的zxid在这个zxid的基础上增加  =>  统一集群的zxid
                 QuorumPacket newLeaderQP = new QuorumPacket(Leader.NEWLEADER, newLeaderZxid, learnerMaster.getQuorumVerifierBytes(), null);
+                // 把packet放入queuedPackets队列
+                // 表示这里会在数据同步之后才会去统一集群的zxid
                 queuedPackets.add(newLeaderQP);
             }
             bufferedOutput.flush();
 
             // Start thread that blast packets in the queue to learner
+            // 开启一个线程向learner发送packet
             startSendingPackets();
 
-            /*
-             * Have to wait for the first ACK, wait until
-             * the learnerMaster is ready, and only then we can
-             * start processing messages.
-             */
+            // Have to wait for the first ACK, wait until the learnerMaster is ready, and only then we can start processing messages.
+            // 接收learner的响应，等待
             qp = new QuorumPacket();
             ia.readRecord(qp, "packet");
 
@@ -628,7 +650,7 @@ public class LearnerHandler extends ZooKeeperThread {
             }
 
             LOG.debug("Received NEWLEADER-ACK message from {}", sid);
-
+            // 判断接收到follower的 ACK 是否过半  learnerSid  learnerSid
             learnerMaster.waitForNewLeaderAck(getSid(), qp.getZxid());
 
             syncLimitCheck.start();
@@ -780,8 +802,8 @@ public class LearnerHandler extends ZooKeeperThread {
      * Determine if we need to sync with follower using DIFF/TRUNC/SNAP
      * and setup follower to receive packets from commit processor
      *
-     * @param peerLastZxid
-     * @param learnerMaster
+     * @param peerLastZxid  learner 的zxid  => oldEpoch
+     * @param learnerMaster leader
      * @return true if snapshot transfer is needed.
      */
     boolean syncFollower(long peerLastZxid, LearnerMaster learnerMaster) {
@@ -848,11 +870,14 @@ public class LearnerHandler extends ZooKeeperThread {
              *
              */
 
+            // peerLastZxid 就是follower或者observer上的最后一次的事务id
             if (forceSnapSync) {
+                // 是否进行 强制快照同步
                 // Force learnerMaster to use snapshot to sync with follower
                 LOG.warn("Forcing snapshot sync - should not see this in production");
             } else if (lastProcessedZxid == peerLastZxid) {
                 // Follower is already sync with us, send empty diff
+                // 与leader的zxid相同，表示已经同步完成，发送一个空的DIFF
                 LOG.info(
                     "Sending DIFF zxid=0x{} for peer sid: {}",
                     Long.toHexString(peerLastZxid),
@@ -862,32 +887,53 @@ public class LearnerHandler extends ZooKeeperThread {
                 needSnap = false;
             } else if (peerLastZxid > maxCommittedLog && !isPeerNewEpochZxid) {
                 // Newer than committedLog, send trunc and done
+                // 大于了最大的提交提交记录的zxid，说明数据多余了
                 LOG.debug(
                     "Sending TRUNC to follower zxidToSend=0x{} for peer sid:{}",
                     Long.toHexString(maxCommittedLog),
                     getSid());
+                // 发送TRUNC packet并将leader的最大提交zxid发送过去
                 queueOpPacket(Leader.TRUNC, maxCommittedLog);
                 currentZxid = maxCommittedLog;
                 needOpPacket = false;
                 needSnap = false;
             } else if ((maxCommittedLog >= peerLastZxid) && (minCommittedLog <= peerLastZxid)) {
                 // Follower is within commitLog range
+                // follower的数据在提交范围之内
                 LOG.info("Using committedLog for peer sid: {}", getSid());
                 Iterator<Proposal> itr = db.getCommittedLog().iterator();
+                // 遍历提交zxid记录进行比对，找到需要发送给learner的记录段 并且发送给learner
+                /**
+                 * itr: 提议记录集合
+                 * peerLastZxid： learner的zxid
+                 * maxZxid：
+                 * maxCommittedLog：最大的已提交zxid
+                 * 同步范围就是[peerLastZxid, maxCommittedLog]
+                 */
                 currentZxid = queueCommittedProposals(itr, peerLastZxid, null, maxCommittedLog);
                 needSnap = false;
             } else if (peerLastZxid < minCommittedLog && txnLogSyncEnabled) {
                 // Use txnlog and committedLog to sync
-
                 // Calculate sizeLimit that we allow to retrieve txnlog from disk
+                // 最近的snapSize * 0.33  可以读取的日志大小  recentSnapt * 0.33
                 long sizeLimit = db.calculateTxnLogSizeLimit();
-                // This method can return empty iterator if the requested zxid
-                // is older than on-disk txnlog
+                // This method can return empty iterator if the requested zxid is older than on-disk txnlog
+                // 这里就会从快照中找出比peerLastZxid大的所有记录 外加一个比peerLastZxid小的快照记录
+                // 如果没有找到或者找到的位置距离最近的snapt大小超过了 sizeLimit 就会返回一个空的Iterator
                 Iterator<Proposal> txnLogItr = db.getProposalsFromTxnLog(peerLastZxid, sizeLimit);
+                /**
+                 * @see TxnLogProposalIterator#hasNext
+                 */
                 if (txnLogItr.hasNext()) {
                     LOG.info("Use txnlog and committedLog for peer sid: {}", getSid());
+                    /**
+                     * itr: 事务日志记录集合
+                     * peerLastZxid： learner的zxid
+                     * minCommittedLog：最小的提交记录
+                     * maxCommittedLog：最大的已提交zxid
+                     * 同步范围就是[peerLastZxid, maxCommittedLog]
+                     */
                     currentZxid = queueCommittedProposals(txnLogItr, peerLastZxid, minCommittedLog, maxCommittedLog);
-
                     if (currentZxid < minCommittedLog) {
                         LOG.info(
                             "Detected gap between end of txnlog: 0x{} and start of committedLog: 0x{}",
@@ -946,14 +992,15 @@ public class LearnerHandler extends ZooKeeperThread {
      * Queue committed proposals into packet queue. The range of packets which
      * is going to be queued are (peerLaxtZxid, maxZxid]
      *
-     * @param itr  iterator point to the proposals
-     * @param peerLastZxid  last zxid seen by the follower
-     * @param maxZxid  max zxid of the proposal to queue, null if no limit
-     * @param lastCommittedZxid when sending diff, we need to send lastCommittedZxid
-     *        on the leader to follow Zab 1.0 protocol.
+     * @param itr  iterator point to the proposals 需要同步的提议集合
+     * @param peerLastZxid  last zxid seen by the follower learner的最大zxid
+     * @param maxZxid  max zxid of the proposal to queue, null if no limit 提议集合的最大zxid（提议集合的限制）
+     * @param lastCommittedZxid when sending diff, we need to send lastCommittedZxid on the leader to follow Zab 1.0 protocol.
+     *
      * @return last zxid of the queued proposal
      */
     protected long queueCommittedProposals(Iterator<Proposal> itr, long peerLastZxid, Long maxZxid, Long lastCommittedZxid) {
+        // 这里取出来的值其实就是计数器是否是0
         boolean isPeerNewEpochZxid = (peerLastZxid & 0xffffffffL) == 0;
         long queuedZxid = peerLastZxid;
         // as we look through proposals, this variable keeps track of previous
@@ -961,34 +1008,37 @@ public class LearnerHandler extends ZooKeeperThread {
         long prevProposalZxid = -1;
         while (itr.hasNext()) {
             Proposal propose = itr.next();
-
+            // 当前提议的zxid
             long packetZxid = propose.packet.getZxid();
-            // abort if we hit the limit
+            // abort if we hit the limit  packetZxid超出了同步集合的限制
             if ((maxZxid != null) && (packetZxid > maxZxid)) {
                 break;
             }
-
             // skip the proposals the peer already has
+            // packetZxid小于learner的zxid，当前的zxid赋值给prevProposalZxid，后续回滚数据会用到这个值
             if (packetZxid < peerLastZxid) {
                 prevProposalZxid = packetZxid;
                 continue;
             }
-
-            // If we are sending the first packet, figure out whether to trunc
-            // or diff
+            // If we are sending the first packet, figure out whether to trunc or diff
+            // 第一次比较packet，看是否需要对learner上的zxid做出什么操作，比较的zxid一般都是提议中最小的zxid
             if (needOpPacket) {
-
                 // Send diff when we see the follower's zxid in our history
+                // 如果第一次比较就相等，直接把lastCommittedZxid发送给follower
                 if (packetZxid == peerLastZxid) {
                     LOG.info(
                         "Sending DIFF zxid=0x{}  for peer sid: {}",
                         Long.toHexString(lastCommittedZxid),
                         getSid());
+                    // queuedPackets队列中添加一个 DIFF packet  并直接开启下一次循环
                     queueOpPacket(Leader.DIFF, lastCommittedZxid);
+                    // 下次就不进入这里了
+                    // 1、在commitlog的循环中，如果找到了一个相等的zxid，那么之后的所有zxid可以直接将packet方法放入队列，所以不用再来这个if
+                    // 2、在snaplog的循环中，如果找到了一个相等的zxid，那么必定是第一个packet，这之后的也不用进if了
                     needOpPacket = false;
                     continue;
                 }
-
+                // 第一次比较不相等，不相等就只有可能是大于，大于则说明当前learner的zxid在leader上不存在
                 if (isPeerNewEpochZxid) {
                     // Send diff and fall through if zxid is of a new-epoch
                     LOG.info(
@@ -998,8 +1048,9 @@ public class LearnerHandler extends ZooKeeperThread {
                     queueOpPacket(Leader.DIFF, lastCommittedZxid);
                     needOpPacket = false;
                 } else if (packetZxid > peerLastZxid) {
-                    // Peer have some proposals that the learnerMaster hasn't seen yet
-                    // it may used to be a leader
+                    // Peer have some proposals that the learnerMaster hasn't seen yet it may used to be a leader
+                    // learner节点可能存在提议，在它曾经是leader的时候没有发送成功，只是在本地做了
+                    // 对于这种节点的处理，leader会发送最接近peerLastZxid的prevProposalZxid给他，让learner回滚到这个prevProposalZxid附近
                     if (ZxidUtils.getEpochFromZxid(packetZxid) != ZxidUtils.getEpochFromZxid(peerLastZxid)) {
                         // We cannot send TRUNC that cross epoch boundary.
                         // The learner will crash if it is asked to do so.
@@ -1007,7 +1058,7 @@ public class LearnerHandler extends ZooKeeperThread {
                         LOG.warn("Cannot send TRUNC to peer sid: " + getSid() + " peer zxid is from different epoch");
                         return queuedZxid;
                     }
-
+                    // 上一届的epoch相等，首先要求learner将数据恢复到leader中某个日志存在的zxid附近，然后在使用diff的模式，将后续的数据发送过去
                     LOG.info(
                         "Sending TRUNC zxid=0x{}  for peer sid: {}",
                         Long.toHexString(prevProposalZxid),
@@ -1018,17 +1069,19 @@ public class LearnerHandler extends ZooKeeperThread {
             }
 
             if (packetZxid <= queuedZxid) {
+                // 快照记录中的zxid 与 learner的zxid相等 直接跳过
                 // We can get here, if we don't have op packet to queue
                 // or there is a duplicate txn in a given iterator
                 continue;
             }
 
-            // Since this is already a committed proposal, we need to follow
-            // it by a commit packet
+            // Since this is already a committed proposal, we need to follow it by a commit packet
             queuePacket(propose.packet);
+            // 将上面的packetZxid提交
+            // 走到这里表示当前的提议是可以接受被接受的，因此会在提议的packet后追加一个commitPacket
             queueOpPacket(Leader.COMMIT, packetZxid);
+            // 这个queuedZxid会最终被返回，所以返回的就是最后一次接收提议的pakcet的zxid
             queuedZxid = packetZxid;
-
         }
 
         if (needOpPacket && isPeerNewEpochZxid) {

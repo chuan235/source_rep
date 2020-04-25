@@ -431,7 +431,7 @@ public class Learner {
      */
     protected long registerWithLeader(int pktType) throws IOException {
         // Send follower info, including last zxid and sid
-        // 当前节点的zxid
+        // 当前节点的  lastProcessedZxid
         long lastLoggedZxid = self.getLastLoggedZxid();
         QuorumPacket qp = new QuorumPacket();
         qp.setType(pktType);
@@ -474,7 +474,7 @@ public class Learner {
                                       + " is less than accepted epoch, "
                                       + self.getAcceptedEpoch());
             }
-            // lastLoggedZxid：当前机器的最后一次事务id 包含了epoch
+            // lastLoggedZxid：当前机器的最后一次事务id 包含了epoch（这里还是旧的epoch）
             QuorumPacket ackNewEpoch = new QuorumPacket(Leader.ACKEPOCH, lastLoggedZxid, epochBytes, null);
             // 向Leader发送一个ACK 的packet
             // 表示自己已经重置的 Epoch，并且将自己机器上的同步之前的 Epoch 发送出去了
@@ -510,6 +510,7 @@ public class Learner {
         // For SNAP and TRUNC the snapshot is needed to save that history
         boolean snapshotNeeded = true;
         boolean syncSnapshot = false;
+        // 读取数据到qp中
         readPacket(qp);
         Deque<Long> packetsCommitted = new ArrayDeque<>();
         Deque<PacketInFlight> packetsNotCommitted = new ArrayDeque<>();
@@ -707,7 +708,7 @@ public class Learner {
                     if (snapshotNeeded) {
                         zk.takeSnapshot(syncSnapshot);
                     }
-                    // 再次更新epoch
+                    // 再次更新epoch  写入currentEpoch文件
                     self.setCurrentEpoch(newEpoch);
                     writeToTxnLog = true; //Anything after this needs to go to the transaction log, not applied directly in memory
                     isPreZAB1_0 = false;
@@ -717,11 +718,13 @@ public class Learner {
                 }
             }
         }
+        // 将最新的zxid发送给leader counter=0
         ack.setZxid(ZxidUtils.makeZxid(newEpoch, 0));
         // 发送ack到leader
         writePacket(ack, true);
         sock.setSoTimeout(self.tickTime * self.syncLimit);
         self.setSyncMode(QuorumPeer.SyncMode.NONE);
+        // 启动zookeeperServer服务
         zk.startup();
         /*
          * Update the election vote here to ensure that all members of the
@@ -730,20 +733,24 @@ public class Learner {
          *
          * @see https://issues.apache.org/jira/browse/ZOOKEEPER-1732
          */
+        // 更新自己的选票
         self.updateElectionVote(newEpoch);
 
         // We need to log the stuff that came in between the snapshot and the uptodate
         if (zk instanceof FollowerZooKeeperServer) {
+            // 如果不是快照同步，所有的packet和zxid都缓存在两个队列中，这里就使用zookeeperServer来处理这些packet
             FollowerZooKeeperServer fzk = (FollowerZooKeeperServer) zk;
             for (PacketInFlight p : packetsNotCommitted) {
+                // 开始处理没有提交的PacketInFlight
                 fzk.logRequest(p.hdr, p.rec, p.digest);
             }
             for (Long zxid : packetsCommitted) {
+                // 本地提交zxid
                 fzk.commit(zxid);
             }
         } else if (zk instanceof ObserverZooKeeperServer) {
-            // Similar to follower, we need to log requests between the snapshot
-            // and UPTODATE
+            // Similar to follower, we need to log requests between the snapshot and UPTODATE
+            // observer在本地直接提交更新即可
             ObserverZooKeeperServer ozk = (ObserverZooKeeperServer) zk;
             for (PacketInFlight p : packetsNotCommitted) {
                 Long zxid = packetsCommitted.peekFirst();

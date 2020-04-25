@@ -1588,8 +1588,8 @@ public class Leader extends LearnerMaster {
             }
 
             /*
-             * Note that addAck already checks that the learner
-             * is a PARTICIPANT.
+             * Note that addAck already checks that the learner is a PARTICIPANT.
+             * 这个addAck只会添加learner中的PARTICIPANT（follower）
              */
             newLeaderProposal.addAck(sid);
 

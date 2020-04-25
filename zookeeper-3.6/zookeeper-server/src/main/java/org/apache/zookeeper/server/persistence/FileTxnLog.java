@@ -675,6 +675,7 @@ public class FileTxnLog implements TxnLog, Closeable {
                 FileTxnLog.getLogFiles(logDir.listFiles(), 0),
                 LOG_FILE_PREFIX,
                 false);
+            // 将zxid大的都放入集合中，小于的也会放一个
             for (File f : files) {
                 if (Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX) >= zxid) {
                     storedFiles.add(f);
