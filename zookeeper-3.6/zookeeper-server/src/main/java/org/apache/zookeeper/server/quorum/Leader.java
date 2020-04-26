@@ -669,6 +669,7 @@ public class Leader extends LearnerMaster {
             self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION);
 
             try {
+                // 等待数据同步完成
                 waitForNewLeaderAck(self.getId(), zk.getZxid());
             } catch (InterruptedException e) {
                 shutdown("Waiting for a quorum of followers, only synced with sids: [ "
@@ -693,7 +694,7 @@ public class Leader extends LearnerMaster {
                 }
                 return;
             }
-
+            // 启动Zookeeper服务
             startZkServer();
 
             /**
@@ -1487,6 +1488,7 @@ public class Leader extends LearnerMaster {
                 }
             }
             QuorumVerifier verifier = self.getQuorumVerifier();
+            // 超过一半的follower都发送ack时返回
             if (electingFollowers.contains(self.getId()) && verifier.containsQuorum(electingFollowers)) {
                 electionFinished = true;
                 electingFollowers.notifyAll();

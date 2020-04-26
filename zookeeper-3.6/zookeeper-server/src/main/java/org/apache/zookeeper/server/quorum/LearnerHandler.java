@@ -604,7 +604,7 @@ public class LearnerHandler extends ZooKeeperThread {
                         Long.toHexString(zxidToSend),
                         syncThrottler.getSyncInProgress(),
                         exemptFromThrottle ? "exempt" : "not exempt");
-                    // Dump data to peer
+                    // Dump data to peer  直接把快照写入socket
                     learnerMaster.getZKDatabase().serializeSnapshot(oa);
                     oa.writeString("BenWasHere", "signature");
                     bufferedOutput.flush();
@@ -700,6 +700,7 @@ public class LearnerHandler extends ZooKeeperThread {
                         LOG.debug("Received ACK from Observer {}", this.sid);
                     }
                     syncLimitCheck.updateAck(qp.getZxid());
+                    // 处理ACK
                     learnerMaster.processAck(this.sid, qp.getZxid(), sock.getLocalSocketAddress());
                     break;
                 case Leader.PING:
@@ -717,18 +718,21 @@ public class LearnerHandler extends ZooKeeperThread {
                     learnerMaster.revalidateSession(qp, this);
                     break;
                 case Leader.REQUEST:
+                    // 如果是follower发送过来的request
                     bb = ByteBuffer.wrap(qp.getData());
                     sessionId = bb.getLong();
                     cxid = bb.getInt();
                     type = bb.getInt();
                     bb = bb.slice();
                     Request si;
+                    // 根据请求类型构建requestPacket
                     if (type == OpCode.sync) {
                         si = new LearnerSyncRequest(this, sessionId, cxid, type, bb, qp.getAuthinfo());
                     } else {
                         si = new Request(null, sessionId, cxid, type, bb, qp.getAuthinfo());
                     }
                     si.setOwner(this);
+                    // leader提交请求
                     learnerMaster.submitLearnerRequest(si);
                     requestsReceived.incrementAndGet();
                     break;
@@ -826,8 +830,11 @@ public class LearnerHandler extends ZooKeeperThread {
         ReadLock rl = lock.readLock();
         try {
             rl.lock();
+            // 内存中已提交日志记录的最大事务id
             long maxCommittedLog = db.getmaxCommittedLog();
+            // 内存中已提交日志记录的最小事务id
             long minCommittedLog = db.getminCommittedLog();
+            // dataTree上的最大的zxid
             long lastProcessedZxid = db.getDataTreeLastProcessedZxid();
 
             LOG.info("Synchronizing with Learner sid: {} maxCommittedLog=0x{}"

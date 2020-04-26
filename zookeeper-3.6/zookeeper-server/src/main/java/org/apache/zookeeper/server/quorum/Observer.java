@@ -117,10 +117,12 @@ public class Observer extends Learner {
 
                 self.setLeaderAddressAndId(master.addr, master.getId());
                 self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION);
+                // 同步数据并且启动Zookeeper服务
                 syncWithLeader(newLeaderZxid);
                 self.setZabState(QuorumPeer.ZabState.BROADCAST);
                 completedSync = true;
                 QuorumPacket qp = new QuorumPacket();
+                // 接受请求
                 while (this.isRunning() && nextLearnerMaster.get() == null) {
                     readPacket(qp);
                     processPacket(qp);

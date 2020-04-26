@@ -58,6 +58,7 @@ public class LearnerHandlerTest extends ZKTestCase {
             super(sock, new BufferedInputStream(sock.getInputStream()), leader);
         }
 
+        @Override
         protected void startSendingPackets() {
             threadStarted = true;
         }
@@ -80,10 +81,12 @@ public class LearnerHandlerTest extends ZKTestCase {
             super(snapLog);
         }
 
+        @Override
         public long getDataTreeLastProcessedZxid() {
             return lastProcessedZxid;
         }
 
+        @Override
         public long getmaxCommittedLog() {
             if (!committedLog.isEmpty()) {
                 return committedLog.getLast().packet.getZxid();
@@ -91,6 +94,7 @@ public class LearnerHandlerTest extends ZKTestCase {
             return 0;
         }
 
+        @Override
         public long getminCommittedLog() {
             if (!committedLog.isEmpty()) {
                 return committedLog.getFirst().packet.getZxid();
@@ -98,14 +102,17 @@ public class LearnerHandlerTest extends ZKTestCase {
             return 0;
         }
 
+        @Override
         public List<Proposal> getCommittedLog() {
             return committedLog;
         }
 
+        @Override
         public ReentrantReadWriteLock getLogLock() {
             return lock;
         }
 
+        @Override
         public Iterator<Proposal> getProposalsFromTxnLog(long peerZxid, long limit) {
             if (peerZxid >= txnLog.peekFirst().packet.getZxid()) {
                 return txnLog.iterator();
