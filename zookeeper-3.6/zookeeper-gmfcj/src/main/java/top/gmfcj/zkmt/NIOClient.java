@@ -3,6 +3,7 @@ package top.gmfcj.zkmt;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -18,73 +19,51 @@ import java.util.Set;
 public class NIOClient {
 
     public static Selector selector;
-    public static SocketChannel clntChan;
+    public static SocketChannel channel;
 
-    static {
-        try {
-            // 先open  然后connect
-            selector = Selector.open();
-            clntChan = SocketChannel.open();
-            clntChan.configureBlocking(false);
-            clntChan.connect(new InetSocketAddress("localhost", 10083));
-            clntChan.register(selector, SelectionKey.OP_READ);
-            while (!clntChan.finishConnect()){
-
-            }
-            System.out.println("已连接！");
-        }catch (Exception e){
-            e.printStackTrace();
-        }
-    }
     public static void main(String[] args) throws IOException {
-        SocketChannel socketChannel = NIOClient.clntChan;
-        ByteBuffer byteBuffer = ByteBuffer.allocate(256);
-        new Avca(selector,socketChannel).start();
-        while (true){
-            Scanner scanner = new Scanner(System.in);
-            String word = scanner.nextLine();
-            byteBuffer.put(word.getBytes());
-            byteBuffer.flip();
-            socketChannel.write(byteBuffer);
-            byteBuffer.clear();
+        selector = Selector.open();
+        // zk
+        channel = SocketChannel.open();
+        channel.configureBlocking(false);
+
+        SelectionKey selectionKey = channel.register(selector, SelectionKey.OP_CONNECT);
+        boolean flag = channel.connect(new InetSocketAddress("localhost", 10083));
+        System.out.println("finishConnect = "+channel.finishConnect());
+        if (flag) {
+            System.out.println("连接成功注册读事件 flag=" + flag);
+            System.out.println("primeConnection .......");
+        } else {
+            System.out.println("连接失败");
         }
-    }
-}
 
-class Avca extends Thread{
-    private Selector selector;
-    private SocketChannel clntChan;
+        channel.register(selector, SelectionKey.OP_READ);
 
-    public Avca(Selector selector,SocketChannel clntChan){
-        this.selector = selector;
-        this.clntChan = clntChan;
-    }
-
-    @Override
-    public void run(){
-        try {
-            while (true){
-                selector.select();
-                Set<SelectionKey> keys = selector.selectedKeys();
-                Iterator<SelectionKey> keyIterator = keys.iterator();
-                ByteBuffer byteBuffer = ByteBuffer.allocate(256);
-                while (keyIterator.hasNext()){
-                    SelectionKey selectionKey = keyIterator.next();
-                    if (selectionKey.isValid()){
-                        if (selectionKey.isReadable()){
-                            SocketChannel socketChannel = (SocketChannel)selectionKey.channel();
-                            socketChannel.read(byteBuffer);
-                            byteBuffer.flip();
-                            byte[] bytes = new byte[byteBuffer.remaining()];
-                            byteBuffer.get(bytes);
-                            System.out.println(new String(bytes));
-                            byteBuffer.clear();
+        new Thread( () -> {
+            while (true) {//一直循环
+                try {
+                    selector.select();//多路复用器开始监听
+                    //获取已经注册在多了复用器上的key通道集
+                    Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
+                    //遍历
+                    while (keys.hasNext()) {
+                        SelectionKey key = keys.next();//获取key
+                        //如果是有效的
+                        if (key.isValid()) {
+                            // 如果为可读状态,读取服务端返回的数据
+                            if (key.isReadable()) {
+                                System.out.println("read....");
+                            }
                         }
+                        //从容器中移除处理过的key
+                        keys.remove();
                     }
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
-        }catch (Exception e){
-            e.printStackTrace();
-        }
+        }).start();
     }
+
 }
+

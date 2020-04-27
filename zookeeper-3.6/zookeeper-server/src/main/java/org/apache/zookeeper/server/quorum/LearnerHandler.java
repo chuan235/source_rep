@@ -700,7 +700,7 @@ public class LearnerHandler extends ZooKeeperThread {
                         LOG.debug("Received ACK from Observer {}", this.sid);
                     }
                     syncLimitCheck.updateAck(qp.getZxid());
-                    // 处理ACK
+                    // 处理ACK Leader.processAck
                     learnerMaster.processAck(this.sid, qp.getZxid(), sock.getLocalSocketAddress());
                     break;
                 case Leader.PING:
@@ -733,6 +733,7 @@ public class LearnerHandler extends ZooKeeperThread {
                     }
                     si.setOwner(this);
                     // leader提交请求
+                    // prepRequestProcessor.processRequest(request);
                     learnerMaster.submitLearnerRequest(si);
                     requestsReceived.incrementAndGet();
                     break;

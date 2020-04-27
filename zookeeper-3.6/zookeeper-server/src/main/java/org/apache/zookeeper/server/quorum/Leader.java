@@ -923,6 +923,7 @@ public class Leader extends LearnerMaster {
         //
         // getting a quorum from all necessary configurations.
         if (!p.hasAllQuorums()) {
+            // 不满足过半机制，直接返回false
             return false;
         }
 
@@ -938,6 +939,7 @@ public class Leader extends LearnerMaster {
         outstandingProposals.remove(zxid);
 
         if (p.request != null) {
+            // 将proposal添加到ToBeAppliedRequestProcessor#toBeApplied集合（在 ToBeAppliedRequestProcessor 处理器中会移除它）
             toBeApplied.add(p);
         }
 
@@ -968,17 +970,20 @@ public class Leader extends LearnerMaster {
             informAndActivate(p, designatedLeader);
             //turnOffFollowers();
         } else {
+            // commit  and   inform
             p.request.logLatency(ServerMetrics.getMetrics().QUORUM_ACK_LATENCY);
             commit(zxid);
             inform(p);
         }
+        // 本地提交
         zk.commitProcessor.commit(p.request);
+        // 处理LearnerSyncRequest
         if (pendingSyncs.containsKey(zxid)) {
+            // 向learner发送LearnerSyncRequest
             for (LearnerSyncRequest r : pendingSyncs.remove(zxid)) {
                 sendSync(r);
             }
         }
-
         return true;
     }
 
@@ -1026,6 +1031,7 @@ public class Leader extends LearnerMaster {
             // The proposal has already been committed
             return;
         }
+        // 取出leader发送的提议
         Proposal p = outstandingProposals.get(zxid);
         if (p == null) {
             LOG.warn("Trying to commit future proposal: zxid 0x{} from {}", Long.toHexString(zxid), followerAddr);
@@ -1035,9 +1041,9 @@ public class Leader extends LearnerMaster {
         if (ackLoggingFrequency > 0 && (zxid % ackLoggingFrequency == 0)) {
             p.request.logLatency(ServerMetrics.getMetrics().ACK_LATENCY, Long.toString(sid));
         }
-
+        // 把接收到ack的serverId放入投票验证器
         p.addAck(sid);
-
+        // tryToCommit内部进行过半验证
         boolean hasCommitted = tryToCommit(p, zxid, followerAddr);
 
         // If p is a reconfiguration, multiple other operations may be ready to be committed,
@@ -1051,10 +1057,12 @@ public class Leader extends LearnerMaster {
 
         if (hasCommitted && p.request != null && p.request.getHdr().getType() == OpCode.reconfig) {
             long curZxid = zxid;
+            // 等outstandingProposals中的提议被移除  =>  满足过半机制后会移除进行commit和inform
             while (allowedToCommit && hasCommitted && p != null) {
                 curZxid++;
                 p = outstandingProposals.get(curZxid);
                 if (p != null) {
+                    // 尝试再去commit
                     hasCommitted = tryToCommit(p, curZxid, null);
                 }
             }
@@ -1068,11 +1076,11 @@ public class Leader extends LearnerMaster {
         private final Leader leader;
 
         /**
-         * This request processor simply maintains the toBeApplied list. For
-         * this to work next must be a FinalRequestProcessor and
-         * FinalRequestProcessor.processRequest MUST process the request
-         * synchronously!
-         *
+         * This request processor simply maintains the toBeApplied list.
+         * For this to work next must be a FinalRequestProcessor and
+         * FinalRequestProcessor.processRequest MUST process the request synchronously!
+         * 请求处理器仅维护 toBeApplied 集合
+         * 为此，接下来必须是 FinalRequestProcessor 和 FinalRequestProcessor.processRequest 同步处理请求
          * @param next
          *                a reference to the FinalRequestProcessor
          */
@@ -1089,9 +1097,7 @@ public class Leader extends LearnerMaster {
         }
 
         /*
-         * (non-Javadoc)
-         *
-         * @see org.apache.zookeeper.server.RequestProcessor#processRequest(org.apache.zookeeper.server.Request)
+         * zxid对应的唯一的写请求，但是读取请求会带上 上一次写入的zxid
          */
         public void processRequest(Request request) throws RequestProcessorException {
             next.processRequest(request);
@@ -1161,6 +1167,7 @@ public class Leader extends LearnerMaster {
             lastCommitted = zxid;
         }
         QuorumPacket qp = new QuorumPacket(Leader.COMMIT, zxid, null, null);
+        // 向follower发送commit
         sendPacket(qp);
         ServerMetrics.getMetrics().COMMIT_COUNT.add(1);
     }
@@ -1184,6 +1191,7 @@ public class Leader extends LearnerMaster {
      */
     public void inform(Proposal proposal) {
         QuorumPacket qp = new QuorumPacket(Leader.INFORM, proposal.request.zxid, proposal.packet.getData(), null);
+        // 向observer发送INFORM
         sendObserverPacket(qp);
     }
 
@@ -1236,8 +1244,8 @@ public class Leader extends LearnerMaster {
      */
     public Proposal propose(Request request) throws XidRolloverException {
         /**
-         * Address the rollover issue. All lower 32bits set indicate a new leader
-         * election. Force a re-election instead. See ZOOKEEPER-1277
+         * Address the rollover issue. All lower 32bits set indicate a new leader election.
+         * Force a re-election instead. See ZOOKEEPER-1277
          */
         if ((request.zxid & 0xffffffffL) == 0xffffffffL) {
             String msg = "zxid lower 32 bits have rolled over, forcing re-election, and therefore new epoch start";
@@ -1267,7 +1275,10 @@ public class Leader extends LearnerMaster {
             LOG.debug("Proposing:: {}", request);
 
             lastProposed = p.packet.getZxid();
+            // 提议发送记录 在接收到follower的ack后会取出这里的提议
             outstandingProposals.put(lastProposed, p);
+            // 将packet加入每一个follower对应的LearnerHandler类中的queuedPackets队列
+            // 最后由发送线程将packet发送出去 =>  LearnerHandler#sendPackets
             sendPacket(pp);
         }
         ServerMetrics.getMetrics().PROPOSAL_COUNT.add(1);

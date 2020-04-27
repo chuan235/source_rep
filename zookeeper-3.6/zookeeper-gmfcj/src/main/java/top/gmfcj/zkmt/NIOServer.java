@@ -2,9 +2,7 @@ package top.gmfcj.zkmt;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.*;
 import java.util.Iterator;
 
 /**
@@ -15,7 +13,7 @@ import java.util.Iterator;
 public class NIOServer {
 
     private static int BUFF_SIZE=1024;
-    private static int TIME_OUT = 2000;
+    private static int TIME_OUT = 3000;
 
     public static void main(String[] args) throws IOException {
 
@@ -37,6 +35,12 @@ public class NIOServer {
                 //如果服务端信道感兴趣的I/O操作为accept
                 if (key.isAcceptable()){
                     // protocol.handleAccept(key);
+                    System.out.println("接收到了请求");
+                    // 接收请求
+                    SocketChannel socketChannel = serverSocketChannel.accept();
+                    socketChannel.configureBlocking(false);
+                    // 注册客户端channel的读 写
+                    socketChannel.register(selector, SelectionKey.OP_READ);
                 }
                 //如果客户端信道感兴趣的I/O操作为read
                 if (key.isReadable()){
