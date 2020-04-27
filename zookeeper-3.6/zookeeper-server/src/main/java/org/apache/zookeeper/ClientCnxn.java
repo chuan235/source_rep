@@ -1202,7 +1202,7 @@ public class ClientCnxn {
                         } else {
                             serverAddress = hostProvider.next(1000);
                         }
-                        // 连接服务端
+                        // 连接服务端  状态改为：CONNECTING
                         startConnect(serverAddress);
                         clientCnxnSocket.updateLastSendAndHeard();
                     }
@@ -1286,6 +1286,7 @@ public class ClientCnxn {
                     // read packets into incomingBuffer.  读取服务端响应的结果
                     // write outgoing queue packets.将outgoingQueue中的packet发送出去
                     // update relevant timestamp.更新相关的时间戳
+                    // 这时状态还是 CONNECTING 在下面的doTransport会正式修改这个状态
                     clientCnxnSocket.doTransport(to, pendingQueue, ClientCnxn.this);
                 } catch (Throwable e) {
                     if (closing) {

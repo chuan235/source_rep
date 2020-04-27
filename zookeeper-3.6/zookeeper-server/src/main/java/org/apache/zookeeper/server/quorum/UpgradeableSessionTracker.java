@@ -78,7 +78,7 @@ public abstract class UpgradeableSessionTracker implements SessionTracker {
      * This simply removes the session from the local tracker and marks
      * it as global.  It is up to the caller to actually
      * queue up a transaction for the session.
-     *
+     * 升级session
      * @param sessionId
      * @return session timeout (-1 if not a local session)
      */

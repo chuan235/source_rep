@@ -51,10 +51,11 @@ public class LeaderRequestProcessor implements RequestProcessor {
             return;
         }
 
-        // Check if this is a local session and we are trying to create
-        // an ephemeral node, in which case we upgrade the session
+        // Check if this is a local session and we are trying to create an ephemeral node, in which case we upgrade the session
+        // 检查当前会话是不是一个本地session，如果是创建一个临时节点，会将本地session升级为全局session
         Request upgradeRequest = null;
         try {
+            // 进行session升级
             upgradeRequest = lzks.checkUpgradeSession(request);
         } catch (KeeperException ke) {
             if (request.getHdr() != null) {

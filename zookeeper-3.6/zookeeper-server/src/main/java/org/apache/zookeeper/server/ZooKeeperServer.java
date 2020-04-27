@@ -1423,8 +1423,9 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // We don't want to receive any packets until we are sure that the session is setup
         // 在回话建立之前  拒绝所有的数据包   不希望接收到任何数据包
         cnxn.disableRecv();
+        // 创建session进入这个if
         if (sessionId == 0) {
-            // 使用sessionTracker新建session
+            // 使用sessionTracker新建session  并且提交createSession请求
             long id = createSession(cnxn, passwd, sessionTimeout);
             LOG.debug(
                 "Client attempting to establish new session: session = 0x{}, zxid = 0x{}, timeout = {}, address = {}",

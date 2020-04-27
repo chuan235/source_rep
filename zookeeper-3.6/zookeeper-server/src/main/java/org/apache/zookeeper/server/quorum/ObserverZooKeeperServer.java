@@ -102,6 +102,9 @@ public class ObserverZooKeeperServer extends LearnerZooKeeperServer {
          *
          * However, this may degrade performance as it has to write to disk
          * and do periodic snapshot which may double the memory requirements
+         * observer需要将数据写入磁盘，以避免集群在数据同步时使得leader总是发送快照
+         * 但是这可能会降低性能，因为它必须定期去同步快照已把数据写入磁盘，这可能会使内存的使用需求增加一倍
+         * 默认为true
          */
         if (syncRequestProcessorEnabled) {
             syncProcessor = new SyncRequestProcessor(this, null);

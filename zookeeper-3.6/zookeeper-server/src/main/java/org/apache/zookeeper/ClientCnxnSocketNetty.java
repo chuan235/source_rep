@@ -164,7 +164,7 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
                         initialized = false;
                         lenBuffer.clear();
                         incomingBuffer = lenBuffer;
-
+                        // 首次建立连接
                         sendThread.primeConnection();
                         updateNow();
                         updateLastSendAndHeard();

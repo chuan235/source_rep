@@ -316,6 +316,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
 
     /**
      * This method will be called inside the ProcessRequestThread, which is a singleton, so there will be a single thread calling this code.
+     *
      * @param type
      * @param zxid
      * @param request
@@ -323,7 +324,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
      */
     protected void pRequest2Txn(int type, long zxid, Request request, Record record, boolean deserialize) throws KeeperException, IOException, RequestProcessorException {
         if (request.getHdr() == null) {
-            // TxnHeader
+            // TxnHeader  设置hdr
             request.setHdr(new TxnHeader(request.sessionId, request.cxid, zxid, Time.currentWallTime(), type));
         }
 
@@ -795,7 +796,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         // request.type + " id = 0x" + Long.toHexString(request.sessionId));
         request.setHdr(null);
         request.setTxn(null);
-
+        System.out.println("开启处理request，requestType = " + request.type);
         try {
             switch (request.type) {
                 case OpCode.createContainer:

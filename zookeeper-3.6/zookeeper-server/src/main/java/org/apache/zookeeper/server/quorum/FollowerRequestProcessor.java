@@ -70,8 +70,8 @@ public class FollowerRequestProcessor extends ZooKeeperCriticalThread implements
                 }
 
                 // We want to queue the request to be processed before we submit
-                // the request to the leader so that we are ready to receive
-                // the response
+                // the request to the leader so that we are ready to receive the response
+                // CommitProcessor#processRequest
                 nextProcessor.processRequest(request);
 
                 // We now ship the request to the leader. As with all

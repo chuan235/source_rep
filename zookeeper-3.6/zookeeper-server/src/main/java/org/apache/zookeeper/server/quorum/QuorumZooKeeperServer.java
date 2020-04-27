@@ -66,6 +66,7 @@ public abstract class QuorumZooKeeperServer extends ZooKeeperServer {
         // This is called by the request processor thread (either follower
         // or observer request processor), which is unique to a learner.
         // So will not be called concurrently by two threads.
+        // 1、创建session的 request 过来的时候，这里的session是本地session
         if ((request.type != OpCode.create && request.type != OpCode.create2 && request.type != OpCode.multi)
             || !upgradeableSessionTracker.isLocalSession(request.sessionId)) {
             return null;
@@ -88,6 +89,7 @@ public abstract class QuorumZooKeeperServer extends ZooKeeperServer {
                 }
             }
             if (!containsEphemeralCreate) {
+                // 没有包含临时节点的创建
                 return null;
             }
         } else {
@@ -105,16 +107,18 @@ public abstract class QuorumZooKeeperServer extends ZooKeeperServer {
         if (!self.isLocalSessionsUpgradingEnabled()) {
             throw new KeeperException.EphemeralOnLocalSessionException();
         }
-
+        // 升级session  构建createSession请求
         return makeUpgradeRequest(request.sessionId);
     }
 
     private Request makeUpgradeRequest(long sessionId) {
-        // Make sure to atomically check local session status, upgrade
-        // session, and make the session creation request.  This is to
-        // avoid another thread upgrading the session in parallel.
+        // Make sure to atomically check local session status, upgrade session, and make the session creation request.
+        // This is to avoid another thread upgrading the session in parallel.
+        // 确保自动检查本地会话状态，升级会话并发出createSession请求。
+        // synchronized这是为了避免另一个线程并行会话升级
         synchronized (upgradeableSessionTracker) {
             if (upgradeableSessionTracker.isLocalSession(sessionId)) {
+                // 其实就是换了一个map存储session   localSessionTracker => upgradingSessions
                 int timeout = upgradeableSessionTracker.upgradeSession(sessionId);
                 ByteBuffer to = ByteBuffer.allocate(4);
                 to.putInt(timeout);

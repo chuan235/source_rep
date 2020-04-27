@@ -26,8 +26,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This RequestProcessor simply forwards requests to an AckRequestProcessor and
- * SyncRequestProcessor.
+ * This RequestProcessor simply forwards requests to an AckRequestProcessor and SyncRequestProcessor.
+ * ProposalRequestProcessor只是将请求转发到AckRequestProcessor和SyncRequestProcessor。
  */
 public class ProposalRequestProcessor implements RequestProcessor {
 
@@ -66,14 +66,19 @@ public class ProposalRequestProcessor implements RequestProcessor {
          * contain the handler. In this case, we add it to syncHandler, and
          * call processRequest on the next processor.
          */
-
+        // 判断request是否为 LearnerSyncRequest
         if (request instanceof LearnerSyncRequest) {
+            // 如果outstandingProposals（当前有Proposal需要发送给follower）不为空，将request添加到pendingSyncs集合
+            // 如果没有Proposal需要发送给follower，直接将这个 LearnerSyncRequest 发送给learner
             zks.getLeader().processSync((LearnerSyncRequest) request);
         } else {
+            // CommitProcessor#processRequest
             nextProcessor.processRequest(request);
             if (request.getHdr() != null) {
                 // We need to sync and get consensus on any transactions
                 try {
+                    // 向follower发送提议
+                    // zxid
                     zks.getLeader().propose(request);
                 } catch (XidRolloverException e) {
                     throw new RequestProcessorException(e.getMessage(), e);

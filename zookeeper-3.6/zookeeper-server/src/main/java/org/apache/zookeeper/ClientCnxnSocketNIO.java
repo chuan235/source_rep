@@ -60,7 +60,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     }
 
     /**
-     * org.apache.zookeeper.ClientCnxnSocketNIO#doIO
+     * @see org.apache.zookeeper.ClientCnxnSocketNIO#doIO
      * @throws InterruptedException
      * @throws IOException
      */
@@ -83,7 +83,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     recvCount.getAndIncrement();
                     readLength();
                 } else if (!initialized) {
-                    // 接收到服务器发送的连接响应
+                    // 接收到服务器发送的连接响应 => 状态改为CONNECTED
                     readConnectResult();
                     enableRead();
                     if (findSendablePacket(outgoingQueue, sendThread.tunnelAuthInProgress()) != null) {
@@ -94,6 +94,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     lenBuffer.clear();
                     incomingBuffer = lenBuffer;
                     updateLastHeard();
+                    // 连接初始化完成
                     initialized = true;
                 } else {
                     // 读取response
@@ -246,6 +247,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     SocketChannel createSock() throws IOException {
         SocketChannel sock;
         sock = SocketChannel.open();
+        // 设置为非阻塞
         sock.configureBlocking(false);
         sock.socket().setSoLinger(false, -1);
         sock.socket().setTcpNoDelay(true);
@@ -261,9 +263,14 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     void registerAndConnect(SocketChannel sock, InetSocketAddress addr) throws IOException {
         // 注册连接事件
         sockKey = sock.register(selector, SelectionKey.OP_CONNECT);
-        // 建立连接
+        // 建立连接  这里是非阻塞的模式 会立即返回false
         boolean immediateConnect = sock.connect(addr);
+        // 只有在后续调用finishConnect来完成连接操作
+//        if(sock.finishConnect()){
+//            System.out.println("连接成功 .... ");
+//        }
         if (immediateConnect) {
+            // 如果是像本地一样立即建立了连接，会在这里面直接发送ConnectRequest
             sendThread.primeConnection();
         }
     }
@@ -273,6 +280,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         // 创建非阻塞的socketChannel
         SocketChannel sock = createSock();
         try {
+            // 注册connect并且连接服务器
             registerAndConnect(sock, addr);
         } catch (IOException e) {
             LOG.error("Unable to open socket to {}", addr);
@@ -343,10 +351,11 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         for (SelectionKey k : selected) {
             SocketChannel sc = ((SocketChannel) k.channel());
             if ((k.readyOps() & SelectionKey.OP_CONNECT) != 0) {
-                // 处理 first Connection
+                // 处理 first Connection  第一次来这里调用finishConnect方法，表示连接建立成功
                 if (sc.finishConnect()) {
                     updateLastSendAndHeard();
                     updateSocketAddresses();
+                    // 发送ConnectRequest
                     sendThread.primeConnection();
                 }
             } else if ((k.readyOps() & (SelectionKey.OP_READ | SelectionKey.OP_WRITE)) != 0) {

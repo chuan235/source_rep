@@ -432,6 +432,7 @@ public class NIOServerCnxn extends ServerCnxn {
         if (!isZKServerRunning()) {
             throw new IOException("ZooKeeperServer not running");
         }
+        System.out.println("处理连接请求  readConnectRequest ");
         zkServer.processConnectRequest(this, incomingBuffer);
         initialized = true;
     }

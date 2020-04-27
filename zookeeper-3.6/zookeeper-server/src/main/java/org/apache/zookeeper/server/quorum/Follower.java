@@ -129,8 +129,11 @@ public class Follower extends Learner {
                 }
                 // create a reusable packet to reduce gc impact
                 QuorumPacket qp = new QuorumPacket();
+                // 接收Leader发送过来的数据
                 while (this.isRunning()) {
+                    // 读取packet
                     readPacket(qp);
+                    // 处理packet
                     processPacket(qp);
                 }
             } catch (Exception e) {
@@ -171,6 +174,7 @@ public class Follower extends Learner {
         case Leader.PROPOSAL:
             ServerMetrics.getMetrics().LEARNER_PROPOSAL_RECEIVED_COUNT.add(1);
             TxnLogEntry logEntry = SerializeUtils.deserializeTxn(qp.getData());
+            // 事务头信息
             TxnHeader hdr = logEntry.getHeader();
             Record txn = logEntry.getTxn();
             TxnDigest digest = logEntry.getDigest();
@@ -180,6 +184,7 @@ public class Follower extends Learner {
                     Long.toHexString(hdr.getZxid()),
                     Long.toHexString(lastQueued + 1));
             }
+            // leader的zxid
             lastQueued = hdr.getZxid();
 
             if (hdr.getType() == OpCode.reconfig) {
@@ -187,7 +192,8 @@ public class Follower extends Learner {
                 QuorumVerifier qv = self.configFromString(new String(setDataTxn.getData()));
                 self.setLastSeenQuorumVerifier(qv, true);
             }
-
+            // 处理事务信息
+            // syncProcessor.processRequest
             fzk.logRequest(hdr, txn, digest);
             if (hdr != null) {
                 /*
@@ -209,6 +215,7 @@ public class Follower extends Learner {
             break;
         case Leader.COMMIT:
             ServerMetrics.getMetrics().LEARNER_COMMIT_RECEIVED_COUNT.add(1);
+            // 调用本地的 CommitProcessor.commit
             fzk.commit(qp.getZxid());
             if (om != null) {
                 final long startTime = Time.currentElapsedTime();
