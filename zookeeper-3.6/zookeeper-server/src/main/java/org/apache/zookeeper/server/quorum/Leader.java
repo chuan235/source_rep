@@ -718,7 +718,7 @@ public class Leader extends LearnerMaster {
             if (!System.getProperty("zookeeper.leaderServes", "yes").equals("no")) {
                 self.setZooKeeperServer(zk);
             }
-
+            // zab开启广播
             self.setZabState(QuorumPeer.ZabState.BROADCAST);
             self.adminServer.setZooKeeperServer(zk);
 

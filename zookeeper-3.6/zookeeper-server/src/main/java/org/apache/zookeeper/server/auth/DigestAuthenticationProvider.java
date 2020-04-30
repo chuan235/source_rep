@@ -89,12 +89,15 @@ public class DigestAuthenticationProvider implements AuthenticationProvider {
     public static String generateDigest(String idPassword) throws NoSuchAlgorithmException {
         String[] parts = idPassword.split(":", 2);
         byte[] digest = MessageDigest.getInstance("SHA1").digest(idPassword.getBytes());
+        // BASE64(SHA1(password))
         return parts[0] + ":" + base64Encode(digest);
     }
+
 
     public KeeperException.Code handleAuthentication(ServerCnxn cnxn, byte[] authData) {
         String id = new String(authData);
         try {
+            // 对用户名和密码加密
             String digest = generateDigest(id);
             if (digest.equals(superDigest)) {
                 cnxn.addAuthInfo(new Id("super", ""));

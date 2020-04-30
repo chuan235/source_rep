@@ -1598,17 +1598,22 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // to the start of the txn
         incomingBuffer = incomingBuffer.slice();
         if (h.getType() == OpCode.auth) {
-            // 认证
+            // 添加用户
             LOG.info("got auth packet {}", cnxn.getRemoteSocketAddress());
             AuthPacket authPacket = new AuthPacket();
             ByteBufferInputStream.byteBuffer2Record(incomingBuffer, authPacket);
+            // addauth digest docker:123
+            // scheme digest/world/auth/ip
             String scheme = authPacket.getScheme();
+            // digest
+            // DigestAuthenticationProvider
+            // IPAuthenticationProvider
             ServerAuthenticationProvider ap = ProviderRegistry.getServerProvider(scheme);
             Code authReturn = KeeperException.Code.AUTHFAILED;
             if (ap != null) {
                 try {
-                    // handleAuthentication may close the connection, to allow the client to choose
-                    // a different server to connect to.
+                    // handleAuthentication may close the connection, to allow the client to choose a different server to connect to.
+                    // handleAuthentication可能会关闭连接，以允许客户端选择要连接的其他服务器。
                     authReturn = ap.handleAuthentication(
                         new ServerAuthenticationProvider.ServerObjs(this, cnxn),
                         authPacket.getAuth());
@@ -1945,6 +1950,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
      * @param setAcls : for set ACL operations, the list of ACLs being set. Otherwise null.
      */
     public void checkACL(ServerCnxn cnxn, List<ACL> acl, int perm, List<Id> ids, String path, List<ACL> setAcls) throws KeeperException.NoAuthException {
+        // 如果配置文件中配置了 skipACL=yes 那么这里会直接跳过acl的校验
         if (skipACL) {
             return;
         }
@@ -1957,6 +1963,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             return;
         }
         for (Id authId : ids) {
+            // zookeeper的超级管理员 super
             if (authId.getScheme().equals("super")) {
                 return;
             }
@@ -1964,12 +1971,14 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         for (ACL a : acl) {
             Id id = a.getId();
             if ((a.getPerms() & perm) != 0) {
+                // 如果sheme是world，也可以直接跳过
                 if (id.getScheme().equals("world") && id.getId().equals("anyone")) {
                     return;
                 }
                 ServerAuthenticationProvider ap = ProviderRegistry.getServerProvider(id.getScheme());
                 if (ap != null) {
                     for (Id authId : ids) {
+                        // auth -> DigestAuthenticationProvider#matches  IPAuthenticationProvider#matches
                         if (authId.getScheme().equals(id.getScheme())
                             && ap.matches(
                                 new ServerAuthenticationProvider.ServerObjs(this, cnxn),

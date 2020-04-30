@@ -44,7 +44,9 @@ public class ProviderRegistry {
         synchronized (ProviderRegistry.class) {
             IPAuthenticationProvider ipp = new IPAuthenticationProvider();
             DigestAuthenticationProvider digp = new DigestAuthenticationProvider();
+            // ip Scheme
             authenticationProviders.put(ipp.getScheme(), ipp);
+            // digest Scheme
             authenticationProviders.put(digp.getScheme(), digp);
             Enumeration<Object> en = System.getProperties().keys();
             while (en.hasMoreElements()) {
@@ -70,8 +72,12 @@ public class ProviderRegistry {
 
     public static AuthenticationProvider getProvider(String scheme) {
         if (!initialized) {
+            // 初始化
             initialize();
         }
+        // 默认就存在两种
+        // ip : IPAuthenticationProvider
+        // digest : DigestAuthenticationProvider
         return authenticationProviders.get(scheme);
     }
 

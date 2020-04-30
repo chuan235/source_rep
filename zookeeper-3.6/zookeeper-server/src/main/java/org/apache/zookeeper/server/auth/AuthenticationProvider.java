@@ -67,6 +67,8 @@ public interface AuthenticationProvider {
      * should be used to identify the creator of a node. Some ids such as hosts
      * and ip addresses are rather transient and in general don't really
      * identify a client even though sometimes they do.
+     * 此方法用于检查是否应使用此提供者完成的身份验证来标识节点的创建者。
+     * 某些ID（例如主机和IP地址）是相当短暂的，即使有时有时也不能真正标识出客户端。
      *
      * @return true if this provider identifies creators.
      */

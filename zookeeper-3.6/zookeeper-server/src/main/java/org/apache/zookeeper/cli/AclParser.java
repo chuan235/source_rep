@@ -33,12 +33,15 @@ public class AclParser {
      * parse string into list of ACL
      * @param aclString
      * @return
+     * setAcl path auth:username:password:rdwca
      */
     public static List<ACL> parse(String aclString) {
         List<ACL> acl;
+        // 可以使用,分割不同的权限
         String[] acls = aclString.split(",");
         acl = new ArrayList<ACL>();
         for (String a : acls) {
+            // 使用冒号在分割一个权限的不同成分
             int firstColon = a.indexOf(':');
             int lastColon = a.lastIndexOf(':');
             if (firstColon == -1 || lastColon == -1 || firstColon == lastColon) {
@@ -46,7 +49,9 @@ public class AclParser {
                 continue;
             }
             ACL newAcl = new ACL();
+            // Id(Schema,id)  ->  schema=auth  id=tomcat:123
             newAcl.setId(new Id(a.substring(0, firstColon), a.substring(firstColon + 1, lastColon)));
+            // 存在的权限值的和  ZooDefs.Perms.READ + DELETE + ADMIN
             newAcl.setPerms(getPermFromString(a.substring(lastColon + 1)));
             acl.add(newAcl);
         }

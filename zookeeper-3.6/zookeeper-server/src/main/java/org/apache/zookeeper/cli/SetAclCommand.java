@@ -71,7 +71,9 @@ public class SetAclCommand extends CliCommand {
     @Override
     public boolean exec() throws CliException {
         String path = args[1];
+        // setAcl path auth:username:password:rdwca
         String aclStr = args[2];
+        // 解析权限字符串
         List<ACL> acl = AclParser.parse(aclStr);
         int version;
         if (cl.hasOption("v")) {
@@ -92,6 +94,7 @@ public class SetAclCommand extends CliCommand {
                     }
                 });
             } else {
+                // org.apache.zookeeper.ZooKeeper.setACL
                 Stat stat = zk.setACL(path, acl, version);
                 if (cl.hasOption("s")) {
                     new StatPrinter(out).print(stat);

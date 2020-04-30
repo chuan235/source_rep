@@ -558,20 +558,30 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
 
                 break;
             case OpCode.setACL:
+                // 检查session
                 zks.sessionTracker.checkSession(request.sessionId, request.getOwner());
                 SetACLRequest setAclRequest = (SetACLRequest) record;
                 if (deserialize) {
+                    // 序列化
                     ByteBufferInputStream.byteBuffer2Record(request.request, setAclRequest);
                 }
                 path = setAclRequest.getPath();
+                // 校验路径
                 validatePath(path, request.sessionId);
+                // 获取acl列表
                 List<ACL> listACL = fixupACL(path, request.authInfo, setAclRequest.getAcl());
+                // 获取最后一次的修改记录
                 nodeRecord = getRecordForPath(path);
+                // 检查是否具有admin的权限
                 zks.checkACL(request.cnxn, nodeRecord.acl, ZooDefs.Perms.ADMIN, request.authInfo, path, listACL);
+                // 检查并增加 acl的version  每次+1
                 newVersion = checkAndIncVersion(nodeRecord.stat.getAversion(), setAclRequest.getVersion(), path);
+                // 生成txn
                 request.setTxn(new SetACLTxn(path, listACL, newVersion));
+                // 修改changeRecord
                 nodeRecord = nodeRecord.duplicate(request.getHdr().getZxid());
                 nodeRecord.stat.setAversion(newVersion);
+                // insert update delete digest
                 nodeRecord.precalculatedDigest = precalculateDigest(
                         DigestOpCode.UPDATE, path, nodeRecord.data, nodeRecord.stat);
                 setTxnDigest(request, nodeRecord.precalculatedDigest);
@@ -1029,6 +1039,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
     public static List<ACL> fixupACL(String path, List<Id> authInfo, List<ACL> acls) throws KeeperException.InvalidACLException {
         // check for well formed ACLs
         // This resolves https://issues.apache.org/jira/browse/ZOOKEEPER-1877
+        // 去重
         List<ACL> uniqacls = removeDuplicates(acls);
         if (uniqacls == null || uniqacls.size() == 0) {
             throw new KeeperException.InvalidACLException(path);
@@ -1046,10 +1057,9 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             if (id.getScheme().equals("world") && id.getId().equals("anyone")) {
                 rv.add(a);
             } else if (id.getScheme().equals("auth")) {
-                // This is the "auth" id, so we have to expand it to the
-                // authenticated ids of the requestor
+                // This is the "auth" id, so we have to expand it to the authenticated ids of the requestor
                 boolean authIdValid = false;
-                for (Id cid : authInfo) {
+                for (Id cid : authInfo) { // 遍历服务端所有的auth信息
                     ServerAuthenticationProvider ap = ProviderRegistry.getServerProvider(cid.getScheme());
                     if (ap == null) {
                         LOG.error("Missing AuthenticationProvider for {}", cid.getScheme());
