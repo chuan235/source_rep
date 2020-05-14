@@ -1,11 +1,5 @@
 package top.gmfcj.proxy;
 
-import top.gmfcj.jvmm.ConcurrentHashMap2;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * -Xmx2m -XX:+HeapDumpOnOutOfMemoryError

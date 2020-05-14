@@ -1,23 +1,52 @@
 package top.gmfcj.jvmm;
 
-import top.gmfcj.client.utils.ThreadUtil;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class JVMMonitorTest {
 
-    public static void main(String[] args) {
-        new Thread(new JVMMonitor(500, 3000, 1000)).start();
+    private JVMMonitorTest(){}
 
-        ThreadUtil.sleep(4000);
-        System.out.println("程序结束了");
-        System.exit(0);
+    private static AtomicReference<JVMMonitorTest> INSTANCE = new AtomicReference<>();
+
+    private static ThreadLocal<JVMMonitorTest> localMonitor = new ThreadLocal<JVMMonitorTest>(){
+        @Override
+        protected JVMMonitorTest initialValue() {
+            return new JVMMonitorTest();
+        }
+    };
+
+    public static void main(String[] args) {
+//        new Thread(new JVMMonitor(500, 3000, 1000)).start();
+
+//        ThreadUtil.sleep(4000);
+//        System.out.println("程序结束了");
+//        System.exit(0);
+
+        System.out.println(LocalDate.now().toString());
     }
+
+    public static JVMMonitorTest getInstance(){
+        for(;;){
+            if(INSTANCE.get() != null){
+                return INSTANCE.get();
+            }
+            JVMMonitorTest instance = new JVMMonitorTest();
+            if(INSTANCE.compareAndSet(null, instance)){
+                return instance;
+            }
+        }
+    }
+
+//    public static JVMMonitorTest getInstance2(){
+//    }
 }
 
 class JVMMonitor implements Runnable {
