@@ -1,20 +1,28 @@
 package top.gmfcj.lettcode;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+
 /**
  * @description: Java中都是值传递的证明
  */
 public class JavaCallByValue {
 
 
-    public static void main(String[] args) {
-        Student a = new Student("小A");
-        Student b = new Student("小B");
-        swap(a, b);
-        System.out.println("studentx.name = " + a.name);
-        System.out.println("studenty.name = " + b.name);
+    public static void main(String[] args) throws IOException {
+//        Student a = new Student("小A");
+//        Student b = new Student("小B");
+//        swap(a, b);
+//        System.out.println("studentx.name = " + a.name);
+//        System.out.println("studenty.name = " + b.name);
+        ServerSocket serverSocket = new ServerSocket();
+        serverSocket.bind(new InetSocketAddress(9000));
+        Socket as = serverSocket.accept();
 
 
-//        int a = 10;
+        //        int a = 10;
 //        int b = 20;
 //        swap(a, b);
 //        System.out.println("x.value = " + a);
